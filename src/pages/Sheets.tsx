@@ -163,6 +163,8 @@ const Sheets = () => {
         throw new Error(`Missing required columns: ${missingHeaders.join(', ')}`);
       }
 
+      const registerNumberCounts = new Map<string, number>();
+
       const processedData = jsonData.map(row => {
         const newRow: Record<string, any> = {};
         let rowSubjectCode: string | null = null;
@@ -170,11 +172,11 @@ const Sheets = () => {
         const originalKeys = Object.keys(row);
         const registerNumberKey = originalKeys.find(k => k.toLowerCase() === 'register number')!;
         const subjectCodeKey = originalKeys.find(k => k.toLowerCase() === 'subject code')!;
+        const registerNumber = String(row[registerNumberKey] || '');
 
         for (const key of originalKeys) {
             newRow[key] = row[key];
             if (key.toLowerCase() === 'register number') {
-                const registerNumber = String(row[registerNumberKey] || '');
                 newRow['roll number'] = registerNumber.length >= 4 
                     ? registerNumber.slice(0, -4) + registerNumber.slice(-3) 
                     : '';
@@ -186,6 +188,11 @@ const Sheets = () => {
                 rowSubjectCode = String(row[subjectCodeKey] || '').trim();
             }
         }
+        
+        const currentCount = (registerNumberCounts.get(registerNumber) || 0) + 1;
+        registerNumberCounts.set(registerNumber, currentCount);
+        newRow['duplicate number'] = currentCount;
+
         newRow.status = rowSubjectCode === selectedSubjectCode ? 'matched' : 'mismatched';
         return newRow;
       });
