@@ -20,6 +20,7 @@ import AddDepartmentForm from "@/components/AddDepartmentForm";
 import { showError, showSuccess, showLoading, dismissToast } from "@/utils/toast";
 import * as XLSX from 'xlsx';
 import * as z from 'zod';
+import { BulkUploadConfirmationDialog } from "@/components/BulkUploadConfirmationDialog";
 
 interface Department {
   id: string;
@@ -37,7 +38,10 @@ const departmentSchema = z.object({
 const Departments = () => {
   const [departments, setDepartments] = useState<Department[]>([]);
   const [loading, setLoading] = useState(true);
-  const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
+  const [confirmationData, setConfirmationData] = useState<any[]>([]);
+  const [isConfirmationOpen, setIsConfirmationOpen] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const fetchDepartments = async () => {
@@ -65,11 +69,9 @@ const Departments = () => {
     XLSX.writeFile(workbook, "department_template.xlsx");
   };
 
-  const handleBulkUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
-
-    const toastId = showLoading("Processing file...");
 
     const reader = new FileReader();
     reader.onload = async (e) => {
@@ -77,34 +79,23 @@ const Departments = () => {
         const data = e.target?.result;
         const workbook = XLSX.read(data, { type: 'binary' });
         const sheetName = workbook.SheetNames[0];
-        if (!sheetName) {
-          throw new Error("No sheet found in the file.");
-        }
+        if (!sheetName) throw new Error("No sheet found in the file.");
+        
         const worksheet = workbook.Sheets[sheetName];
         const json = XLSX.utils.sheet_to_json(worksheet);
 
         const parsedData = z.array(departmentSchema).parse(json);
-
-        if (parsedData.length === 0) {
-          throw new Error("The file is empty or doesn't contain valid data.");
-        }
-
-        const { error } = await supabase.from('departments').insert(parsedData);
-        if (error) {
-          throw new Error(error.message);
-        }
-
-        dismissToast(toastId);
-        showSuccess(`${parsedData.length} departments uploaded successfully!`);
-        fetchDepartments();
+        if (parsedData.length === 0) throw new Error("The file is empty or doesn't contain valid data.");
+        
+        setConfirmationData(parsedData);
+        setIsConfirmationOpen(true);
       } catch (error) {
-        dismissToast(toastId);
         if (error instanceof z.ZodError) {
           showError(`Validation failed: ${error.errors.map(e => `${e.path.join('.')} - ${e.message}`).join(', ')}`);
         } else if (error instanceof Error) {
-          showError(`Upload failed: ${error.message}`);
+          showError(`File processing failed: ${error.message}`);
         } else {
-          showError("An unexpected error occurred during bulk upload.");
+          showError("An unexpected error occurred during file processing.");
         }
         console.error(error);
       } finally {
@@ -116,6 +107,34 @@ const Departments = () => {
     reader.readAsBinaryString(file);
   };
 
+  const handleConfirmUpload = async () => {
+    setIsUploading(true);
+    const toastId = showLoading("Uploading data...");
+
+    try {
+      const { error } = await supabase.from('departments').insert(confirmationData);
+      if (error) throw new Error(error.message);
+
+      dismissToast(toastId);
+      showSuccess(`${confirmationData.length} departments uploaded successfully!`);
+      fetchDepartments();
+      setIsConfirmationOpen(false);
+      setConfirmationData([]);
+    } catch (error) {
+      dismissToast(toastId);
+      showError(error instanceof Error ? `Upload failed: ${error.message}` : "An unexpected error occurred during upload.");
+      console.error(error);
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  const departmentHeaders = [
+    { key: 'degree', label: 'Degree' },
+    { key: 'department_code', label: 'Code' },
+    { key: 'department_name', label: 'Name' },
+  ];
+
   return (
     <div>
       <div className="flex justify-between items-center mb-6">
@@ -126,11 +145,11 @@ const Departments = () => {
           <input
             type="file"
             ref={fileInputRef}
-            onChange={handleBulkUpload}
+            onChange={handleFileSelect}
             className="hidden"
             accept=".xlsx, .xls"
           />
-          <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+          <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
             <DialogTrigger asChild>
               <Button>Add Department</Button>
             </DialogTrigger>
@@ -140,7 +159,7 @@ const Departments = () => {
               </DialogHeader>
               <AddDepartmentForm
                 onSuccess={() => {
-                  setIsDialogOpen(false);
+                  setIsAddDialogOpen(false);
                   fetchDepartments();
                 }}
               />
@@ -148,6 +167,15 @@ const Departments = () => {
           </Dialog>
         </div>
       </div>
+
+      <BulkUploadConfirmationDialog
+        isOpen={isConfirmationOpen}
+        onClose={() => setIsConfirmationOpen(false)}
+        onConfirm={handleConfirmUpload}
+        data={confirmationData}
+        headers={departmentHeaders}
+        isUploading={isUploading}
+      />
 
       {loading ? (
         <p>Loading departments...</p>
