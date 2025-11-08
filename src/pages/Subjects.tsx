@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import {
@@ -17,7 +17,9 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import AddSubjectForm from "@/components/AddSubjectForm";
-import { showError } from "@/utils/toast";
+import { showError, showSuccess, showLoading, dismissToast } from "@/utils/toast";
+import * as XLSX from 'xlsx';
+import * as z from 'zod';
 
 interface Subject {
   id: string;
@@ -26,10 +28,17 @@ interface Subject {
   departments: { department_name: string } | null;
 }
 
+const subjectSchema = z.object({
+  subject_code: z.string({ required_error: "subject_code is required." }).min(1),
+  subject_name: z.string({ required_error: "subject_name is required." }).min(1),
+  department_code: z.string().optional(),
+});
+
 const Subjects = () => {
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [loading, setLoading] = useState(true);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const fetchSubjects = async () => {
     setLoading(true);
@@ -51,26 +60,113 @@ const Subjects = () => {
     fetchSubjects();
   }, []);
 
+  const handleDownloadTemplate = () => {
+    const worksheet = XLSX.utils.json_to_sheet([
+      { subject_code: "CS101", subject_name: "Introduction to Computer Science", department_code: "CSE" },
+      { subject_code: "PH101", subject_name: "Engineering Physics", department_code: "" },
+    ]);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Subjects");
+    XLSX.utils.sheet_add_aoa(worksheet, [["(Leave department_code empty for Common subjects)"]], { origin: "D1" });
+    XLSX.writeFile(workbook, "subject_template.xlsx");
+  };
+
+  const handleBulkUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    const toastId = showLoading("Processing file...");
+
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+      try {
+        const { data: departmentsData, error: deptError } = await supabase.from('departments').select('id, department_code');
+        if (deptError) throw new Error("Could not fetch departments for validation.");
+        
+        const departmentCodeToIdMap = new Map(departmentsData.map(dept => [dept.department_code, dept.id]));
+
+        const data = e.target?.result;
+        const workbook = XLSX.read(data, { type: 'binary' });
+        const sheetName = workbook.SheetNames[0];
+        if (!sheetName) throw new Error("No sheet found in the file.");
+        
+        const worksheet = workbook.Sheets[sheetName];
+        const json = XLSX.utils.sheet_to_json(worksheet);
+
+        const parsedData = z.array(subjectSchema).parse(json);
+        if (parsedData.length === 0) throw new Error("The file is empty or doesn't contain valid data.");
+
+        const subjectsToInsert = parsedData.map(subject => {
+          const department_code = subject.department_code?.trim();
+          const department_id = department_code ? departmentCodeToIdMap.get(department_code) : null;
+
+          if (department_code && department_id === undefined) {
+            throw new Error(`Invalid department_code: "${department_code}" for subject "${subject.subject_code}".`);
+          }
+
+          return {
+            subject_code: subject.subject_code,
+            subject_name: subject.subject_name,
+            department_id: department_id,
+          };
+        });
+
+        const { error } = await supabase.from('subjects').insert(subjectsToInsert);
+        if (error) throw new Error(error.message);
+
+        dismissToast(toastId);
+        showSuccess(`${parsedData.length} subjects uploaded successfully!`);
+        fetchSubjects();
+      } catch (error) {
+        dismissToast(toastId);
+        if (error instanceof z.ZodError) {
+          showError(`Validation failed: ${error.errors.map(e => `${e.path.join('.')} - ${e.message}`).join(', ')}`);
+        } else if (error instanceof Error) {
+          showError(`Upload failed: ${error.message}`);
+        } else {
+          showError("An unexpected error occurred during bulk upload.");
+        }
+        console.error(error);
+      } finally {
+        if (fileInputRef.current) {
+          fileInputRef.current.value = "";
+        }
+      }
+    };
+    reader.readAsBinaryString(file);
+  };
+
   return (
     <div>
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-3xl font-bold">Subjects</h1>
-        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-          <DialogTrigger asChild>
-            <Button>Add Subject</Button>
-          </DialogTrigger>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Add New Subject</DialogTitle>
-            </DialogHeader>
-            <AddSubjectForm
-              onSuccess={() => {
-                setIsDialogOpen(false);
-                fetchSubjects();
-              }}
-            />
-          </DialogContent>
-        </Dialog>
+        <div className="flex gap-2">
+          <Button onClick={handleDownloadTemplate}>Download Template</Button>
+          <Button onClick={() => fileInputRef.current?.click()}>Bulk Upload</Button>
+          <input
+            type="file"
+            ref={fileInputRef}
+            onChange={handleBulkUpload}
+            className="hidden"
+            accept=".xlsx, .xls"
+          />
+          <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+            <DialogTrigger asChild>
+              <Button>Add Subject</Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Add New Subject</DialogTitle>
+              </DialogHeader>
+              <AddSubjectForm
+                onSuccess={() => {
+                  setIsDialogOpen(false);
+                  fetchSubjects();
+                }}
+              />
+            </DialogContent>
+          </Dialog>
+        </div>
       </div>
 
       {loading ? (
