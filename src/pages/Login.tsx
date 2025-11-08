@@ -20,13 +20,13 @@ const Login = () => {
   return (
     <div className="flex justify-center items-center min-h-screen bg-gray-100">
       <div className="w-full max-w-md p-8 space-y-8 bg-white rounded-lg shadow-md">
-        <h1 className="text-2xl font-bold text-center">Login</h1>
+        <h1 className="text-2xl font-bold text-center">Welcome</h1>
         <Auth
           supabaseClient={supabase}
           appearance={{ theme: ThemeSupa }}
           providers={[]}
           view="sign_in"
-          showLinks={false}
+          showLinks={true}
         />
       </div>
     </div>
