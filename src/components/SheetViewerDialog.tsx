@@ -17,19 +17,29 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { useState, useEffect } from "react";
-import { showError } from "@/utils/toast";
+import { supabase } from "@/integrations/supabase/client";
+import { showLoading, dismissToast, showSuccess, showError } from "@/utils/toast";
+import * as XLSX from 'xlsx';
+
+interface Sheet {
+  id: string;
+  sheet_name: string;
+  file_path: string;
+  created_at: string;
+}
 
 interface SheetViewerDialogProps {
   isOpen: boolean;
   onClose: () => void;
+  sheet: Sheet | null;
   sheetData: Record<string, any>[];
-  sheetName: string;
   showDuplicateGenerator?: boolean;
 }
 
-const SheetViewerDialog = ({ isOpen, onClose, sheetData, sheetName, showDuplicateGenerator = false }: SheetViewerDialogProps) => {
+const SheetViewerDialog = ({ isOpen, onClose, sheet, sheetData, showDuplicateGenerator = false }: SheetViewerDialogProps) => {
   const [displayData, setDisplayData] = useState<Record<string, any>[]>([]);
   const [startNumber, setStartNumber] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
     if (isOpen) {
@@ -38,21 +48,54 @@ const SheetViewerDialog = ({ isOpen, onClose, sheetData, sheetName, showDuplicat
     }
   }, [isOpen, sheetData]);
 
-  const handleGenerate = () => {
+  const handleGenerateAndSave = async () => {
+    if (!sheet) {
+      showError("Sheet information is missing. Cannot save.");
+      return;
+    }
     const startingNum = parseInt(startNumber, 10);
     if (isNaN(startingNum)) {
       showError("Please enter a valid starting number.");
       return;
     }
 
-    const updatedData = sheetData.map((row, index) => {
-      const duplicateNumberKey = Object.keys(row).find(k => k.toLowerCase() === 'duplicate number') || 'duplicate number';
-      const newRow = { ...row };
-      newRow[duplicateNumberKey] = startingNum + index;
-      return newRow;
-    });
-    
-    setDisplayData(updatedData);
+    setIsSaving(true);
+    const toastId = showLoading("Generating and saving numbers...");
+
+    try {
+      const updatedData = sheetData.map((row, index) => {
+        const duplicateNumberKey = Object.keys(row).find(k => k.toLowerCase() === 'duplicate number') || 'duplicate number';
+        const newRow = { ...row };
+        newRow[duplicateNumberKey] = startingNum + index;
+        return newRow;
+      });
+
+      const newWorksheet = XLSX.utils.json_to_sheet(updatedData);
+      const newWorkbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(newWorkbook, newWorksheet, 'Sheet1');
+      
+      const wbout = XLSX.write(newWorkbook, { bookType: 'xlsx', type: 'array' });
+      const blob = new Blob([wbout], { type: 'application/octet-stream' });
+      
+      const { error } = await supabase.storage
+        .from('sheets')
+        .update(sheet.file_path, blob, {
+          cacheControl: '3600',
+          upsert: false,
+        });
+
+      if (error) throw error;
+
+      setDisplayData(updatedData);
+      dismissToast(toastId);
+      showSuccess("Duplicate numbers generated and saved successfully!");
+
+    } catch (error: any) {
+      dismissToast(toastId);
+      showError(error.message || "Failed to save the sheet.");
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const handleReset = () => {
@@ -60,12 +103,16 @@ const SheetViewerDialog = ({ isOpen, onClose, sheetData, sheetName, showDuplicat
     setStartNumber('');
   };
 
-  if (!sheetData || sheetData.length === 0) {
+  if (!sheet || !sheetData) {
+    return null;
+  }
+  
+  if (sheetData.length === 0) {
     return (
        <Dialog open={isOpen} onOpenChange={onClose}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>{sheetName}</DialogTitle>
+            <DialogTitle>{sheet.sheet_name}</DialogTitle>
           </DialogHeader>
           <p className="py-8 text-center text-muted-foreground">This sheet appears to be empty.</p>
         </DialogContent>
@@ -79,7 +126,7 @@ const SheetViewerDialog = ({ isOpen, onClose, sheetData, sheetName, showDuplicat
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="sm:max-w-[80vw] max-h-[90vh] flex flex-col">
         <DialogHeader>
-          <DialogTitle>{sheetName}</DialogTitle>
+          <DialogTitle>{sheet.sheet_name}</DialogTitle>
         </DialogHeader>
         <div className="flex-grow overflow-hidden min-h-0">
           <ScrollArea className="h-[50vh] w-full rounded-md border">
@@ -117,9 +164,14 @@ const SheetViewerDialog = ({ isOpen, onClose, sheetData, sheetName, showDuplicat
                 value={startNumber}
                 onChange={(e) => setStartNumber(e.target.value)}
                 className="w-40"
+                disabled={isSaving}
               />
-              <Button onClick={handleGenerate}>Generate</Button>
-              <Button variant="outline" onClick={handleReset}>Reset</Button>
+              <Button onClick={handleGenerateAndSave} disabled={isSaving}>
+                {isSaving ? 'Saving...' : 'Generate & Save'}
+              </Button>
+              <Button variant="outline" onClick={handleReset} disabled={isSaving}>
+                Reset
+              </Button>
             </div>
           </DialogFooter>
         )}

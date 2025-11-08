@@ -40,8 +40,8 @@ const CoeSheets = () => {
   const [loadingSheets, setLoadingSheets] = useState(false);
   
   const [isViewerOpen, setIsViewerOpen] = useState(false);
+  const [currentSheet, setCurrentSheet] = useState<Sheet | null>(null);
   const [currentSheetData, setCurrentSheetData] = useState<Record<string, any>[]>([]);
-  const [currentSheetName, setCurrentSheetName] = useState('');
 
   useEffect(() => {
     const fetchDepartments = async () => {
@@ -130,7 +130,7 @@ const CoeSheets = () => {
           const json = XLSX.utils.sheet_to_json(worksheet);
           
           setCurrentSheetData(json);
-          setCurrentSheetName(sheet.sheet_name);
+          setCurrentSheet(sheet);
           setIsViewerOpen(true);
           dismissToast(toastId);
         } catch (parseError: any) {
@@ -262,8 +262,8 @@ const CoeSheets = () => {
       <SheetViewerDialog
         isOpen={isViewerOpen}
         onClose={() => setIsViewerOpen(false)}
+        sheet={currentSheet}
         sheetData={currentSheetData}
-        sheetName={currentSheetName}
         showDuplicateGenerator={true}
       />
     </div>
