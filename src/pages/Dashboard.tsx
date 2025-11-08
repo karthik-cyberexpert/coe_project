@@ -1,8 +1,8 @@
-import { Button } from '@/components/ui/button';
 import { supabase } from '@/integrations/supabase/client';
 import { useNavigate } from 'react-router-dom';
 import { useEffect, useState } from 'react';
 import { User } from '@supabase/supabase-js';
+import Sidebar from '@/components/Sidebar';
 
 const Dashboard = () => {
   const navigate = useNavigate();
@@ -30,12 +30,12 @@ const Dashboard = () => {
   }
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen bg-gray-50">
-      <div className="p-8 bg-white rounded-lg shadow-md text-center">
+    <div className="flex min-h-screen bg-white">
+      <Sidebar user={user} onSignOut={handleSignOut} />
+      <main className="flex-1 p-8">
         <h1 className="text-3xl font-bold mb-4">Welcome to the Dashboard</h1>
-        <p className="mb-8 text-gray-600">You are signed in as: <strong>{user.email}</strong></p>
-        <Button onClick={handleSignOut}>Sign Out</Button>
-      </div>
+        <p className="text-gray-600">Your dashboard content goes here.</p>
+      </main>
     </div>
   );
 };
