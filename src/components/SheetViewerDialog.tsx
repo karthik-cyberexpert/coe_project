@@ -13,6 +13,13 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -40,13 +47,43 @@ const SheetViewerDialog = ({ isOpen, onClose, sheet, sheetData, showDuplicateGen
   const [displayData, setDisplayData] = useState<Record<string, any>[]>([]);
   const [startNumber, setStartNumber] = useState('');
   const [isSaving, setIsSaving] = useState(false);
+  const [sortOption, setSortOption] = useState('default');
 
   useEffect(() => {
     if (isOpen) {
-      setDisplayData(sheetData);
-      setStartNumber('');
+      let data = [...sheetData];
+      const rollNumberKey = data.length > 0 ? Object.keys(data[0]).find(k => k.toLowerCase().replace(/\s/g, '') === 'rollnumber') : undefined;
+      const duplicateNumberKey = data.length > 0 ? Object.keys(data[0]).find(k => k.toLowerCase().replace(/\s/g, '') === 'duplicatenumber') : undefined;
+
+      switch (sortOption) {
+        case 'roll_asc':
+          if (rollNumberKey) data.sort((a, b) => String(a[rollNumberKey]).localeCompare(String(b[rollNumberKey]), undefined, { numeric: true }));
+          break;
+        case 'roll_desc':
+          if (rollNumberKey) data.sort((a, b) => String(b[rollNumberKey]).localeCompare(String(a[rollNumberKey]), undefined, { numeric: true }));
+          break;
+        case 'dup_asc':
+          if (duplicateNumberKey) data.sort((a, b) => (Number(a[duplicateNumberKey]) || 0) - (Number(b[duplicateNumberKey]) || 0));
+          break;
+        case 'dup_desc':
+          if (duplicateNumberKey) data.sort((a, b) => (Number(b[duplicateNumberKey]) || 0) - (Number(a[duplicateNumberKey]) || 0));
+          break;
+        default:
+          // 'default' case, do nothing, `data` is already a copy of `sheetData`
+          break;
+      }
+      setDisplayData(data);
     }
-  }, [isOpen, sheetData]);
+  }, [isOpen, sheetData, sortOption]);
+
+  useEffect(() => {
+    if (isOpen) {
+      setStartNumber('');
+    } else {
+      // Reset sort option when dialog is closed
+      setSortOption('default');
+    }
+  }, [isOpen]);
 
   const handleGenerateAndSave = async () => {
     if (!sheet) {
@@ -63,16 +100,11 @@ const SheetViewerDialog = ({ isOpen, onClose, sheet, sheetData, showDuplicateGen
     const toastId = showLoading("Generating and saving numbers...");
 
     try {
-      // --- NEW SHUFFLING LOGIC ---
       const dataToShuffle = [...sheetData];
-
-      // 1. Grouping into chunks of 5
       const groups = [];
       for (let i = 0; i < dataToShuffle.length; i += 5) {
         groups.push(dataToShuffle.slice(i, i + 5));
       }
-
-      // Helper for Fisher-Yates Shuffle
       const shuffleArray = (array: any[]) => {
         for (let i = array.length - 1; i > 0; i--) {
           const j = Math.floor(Math.random() * (i + 1));
@@ -80,26 +112,17 @@ const SheetViewerDialog = ({ isOpen, onClose, sheet, sheetData, showDuplicateGen
         }
         return array;
       };
-
-      // 2. Shuffle the order of the groups
       const shuffledGroups = shuffleArray(groups);
-
-      // 3. Shuffle rows within each group and then flatten the array
       const shuffledData = shuffledGroups.map(group => shuffleArray([...group])).flat();
-
-      // 4. Assign duplicate numbers to the fully shuffled data
       const duplicateNumberKey = (sheetData.length > 0 && Object.keys(sheetData[0]).find(k => k.toLowerCase() === 'duplicate number')) || 'duplicate number';
-      
       const updatedData = shuffledData.map((row, index) => ({
         ...row,
         [duplicateNumberKey]: startingNum + index,
       }));
-      // --- END OF NEW LOGIC ---
 
       const newWorksheet = XLSX.utils.json_to_sheet(updatedData);
       const newWorkbook = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(newWorkbook, newWorksheet, 'Sheet1');
-      
       const wbout = XLSX.write(newWorkbook, { bookType: 'xlsx', type: 'array' });
       const blob = new Blob([wbout], { type: 'application/octet-stream' });
       
@@ -125,8 +148,8 @@ const SheetViewerDialog = ({ isOpen, onClose, sheet, sheetData, showDuplicateGen
   };
 
   const handleReset = () => {
-    setDisplayData(sheetData);
     setStartNumber('');
+    setSortOption('default');
   };
 
   if (!sheet || !sheetData) {
@@ -178,11 +201,23 @@ const SheetViewerDialog = ({ isOpen, onClose, sheet, sheetData, showDuplicateGen
             </div>
           </ScrollArea>
         </div>
-        {showDuplicateGenerator && (
-          <DialogFooter className="pt-4 border-t flex-col sm:flex-row sm:justify-between">
-             <div className="text-sm text-muted-foreground mb-2 sm:mb-0">
-              Displaying {displayData.length} of {sheetData.length} original rows.
-            </div>
+        <DialogFooter className="pt-4 border-t flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
+          <div className="flex items-center gap-2">
+            <Select value={sortOption} onValueChange={setSortOption}>
+              <SelectTrigger className="w-[240px]">
+                <SelectValue placeholder="Sort by..." />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="default">Default Order</SelectItem>
+                <SelectItem value="roll_asc">Roll Number (Ascending)</SelectItem>
+                <SelectItem value="roll_desc">Roll Number (Descending)</SelectItem>
+                <SelectItem value="dup_asc">Duplicate Number (Ascending)</SelectItem>
+                <SelectItem value="dup_desc">Duplicate Number (Descending)</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          
+          {showDuplicateGenerator ? (
             <div className="flex items-center gap-2 justify-end">
               <Input
                 type="number"
@@ -199,8 +234,12 @@ const SheetViewerDialog = ({ isOpen, onClose, sheet, sheetData, showDuplicateGen
                 Reset
               </Button>
             </div>
-          </DialogFooter>
-        )}
+          ) : (
+              <div className="text-sm text-muted-foreground">
+              Displaying {displayData.length} of {sheetData.length} rows.
+            </div>
+          )}
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   );
