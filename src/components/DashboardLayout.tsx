@@ -18,13 +18,13 @@ const DashboardLayout = () => {
         setUser(user);
         const { data: profileData, error } = await supabase
           .from('profiles')
-          .select('full_name, is_admin, is_ceo')
+          .select('full_name, is_admin, is_ceo, is_sub_admin')
           .eq('id', user.id)
           .single();
 
         if (error) {
           console.error('Error fetching profile:', error);
-          setProfile({ full_name: null, is_admin: false, is_ceo: false });
+          setProfile({ full_name: null, is_admin: false, is_ceo: false, is_sub_admin: false });
         } else {
           setProfile(profileData);
         }

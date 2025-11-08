@@ -7,6 +7,7 @@ interface Profile {
   full_name: string | null;
   is_admin: boolean | null;
   is_ceo: boolean | null;
+  is_sub_admin: boolean | null;
 }
 
 interface SidebarProps {
@@ -23,6 +24,10 @@ const adminNavItems = [
 
 const coeNavItems = [
   { href: "/coe-sheets", icon: Sheet, label: "View Sheets" },
+];
+
+const subAdminNavItems = [
+  { href: "/subadmin-sheets", icon: Sheet, label: "Sheets" },
 ];
 
 const Sidebar = ({ user, profile, onSignOut }: SidebarProps) => {
@@ -48,6 +53,22 @@ const Sidebar = ({ user, profile, onSignOut }: SidebarProps) => {
         )}
         {profile.is_ceo && (
           coeNavItems.map((item) => (
+            <NavLink
+              key={item.href}
+              to={item.href}
+              className={({ isActive }) =>
+                `flex items-center px-3 py-2 text-gray-700 rounded-md hover:bg-gray-200 ${
+                  isActive ? "bg-gray-300 font-semibold" : ""
+                }`
+              }
+            >
+              <item.icon className="w-5 h-5 mr-3" />
+              {item.label}
+            </NavLink>
+          ))
+        )}
+        {profile.is_sub_admin && (
+          subAdminNavItems.map((item) => (
             <NavLink
               key={item.href}
               to={item.href}

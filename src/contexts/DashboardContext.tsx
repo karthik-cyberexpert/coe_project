@@ -5,6 +5,7 @@ export interface Profile {
   full_name: string | null;
   is_admin: boolean | null;
   is_ceo: boolean | null;
+  is_sub_admin: boolean | null;
 }
 
 export interface DashboardContextType {
