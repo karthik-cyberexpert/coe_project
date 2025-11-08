@@ -5,7 +5,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { showError, showSuccess, showLoading, dismissToast } from '@/utils/toast';
-import { Trash2 } from 'lucide-react';
+import { Eye, Trash2 } from 'lucide-react';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -16,6 +16,8 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import SheetViewerDialog from '@/components/SheetViewerDialog';
+import * as XLSX from 'xlsx';
 
 interface Department {
   id: string;
@@ -47,6 +49,10 @@ const Sheets = () => {
   const [loadingSheets, setLoadingSheets] = useState(false);
   const [sheetToDelete, setSheetToDelete] = useState<Sheet | null>(null);
   
+  const [isViewerOpen, setIsViewerOpen] = useState(false);
+  const [currentSheetData, setCurrentSheetData] = useState<Record<string, any>[]>([]);
+  const [currentSheetName, setCurrentSheetName] = useState('');
+
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -184,6 +190,46 @@ const Sheets = () => {
     }
   };
 
+  const handleViewSheet = async (sheet: Sheet) => {
+    const toastId = showLoading(`Loading ${sheet.sheet_name}...`);
+    try {
+      const { data, error } = await supabase.storage
+        .from('sheets')
+        .download(sheet.file_path);
+
+      if (error) throw error;
+
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        try {
+          const arrayBuffer = e.target?.result;
+          const workbook = XLSX.read(arrayBuffer, { type: 'array' });
+          const sheetName = workbook.SheetNames[0];
+          if (!sheetName) throw new Error("No sheet found in the file.");
+          const worksheet = workbook.Sheets[sheetName];
+          const json = XLSX.utils.sheet_to_json(worksheet);
+          
+          setCurrentSheetData(json);
+          setCurrentSheetName(sheet.sheet_name);
+          setIsViewerOpen(true);
+          dismissToast(toastId);
+        } catch (parseError: any) {
+          dismissToast(toastId);
+          showError(`Failed to parse sheet: ${parseError.message}`);
+        }
+      };
+      reader.onerror = () => {
+        dismissToast(toastId);
+        showError('Failed to read the downloaded file.');
+      };
+      reader.readAsArrayBuffer(data);
+
+    } catch (error: any) {
+      dismissToast(toastId);
+      showError(error.message || 'Failed to download sheet.');
+    }
+  };
+
   return (
     <div className="space-y-6">
       <h1 className="text-3xl font-bold">Sheets</h1>
@@ -253,6 +299,9 @@ const Sheets = () => {
                         <TableCell className="font-medium">{sheet.sheet_name}</TableCell>
                         <TableCell>{new Date(sheet.created_at).toLocaleString()}</TableCell>
                         <TableCell className="text-right">
+                           <Button variant="ghost" size="icon" onClick={() => handleViewSheet(sheet)}>
+                            <Eye className="h-4 w-4" />
+                          </Button>
                           <Button variant="ghost" size="icon" onClick={() => setSheetToDelete(sheet)}>
                             <Trash2 className="h-4 w-4 text-red-600" />
                           </Button>
@@ -282,6 +331,12 @@ const Sheets = () => {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+      <SheetViewerDialog
+        isOpen={isViewerOpen}
+        onClose={() => setIsViewerOpen(false)}
+        sheetData={currentSheetData}
+        sheetName={currentSheetName}
+      />
     </div>
   );
 };
