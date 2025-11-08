@@ -122,49 +122,83 @@ const Sheets = () => {
     fetchSheets();
   }, [selectedSubject]);
 
-  const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChangeAndUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
+    if (fileInputRef.current) fileInputRef.current.value = ""; // Reset file input
     if (!file) return;
     if (!file.name.endsWith('.xlsx')) {
         showError("Invalid file type. Please upload an .xlsx file.");
         return;
     }
-    handleUpload(file);
-  };
 
-  const handleUpload = async (file: File) => {
-    const toastId = showLoading('Uploading sheet...');
+    const toastId = showLoading('Processing sheet...');
+
     try {
-      const filePath = `${selectedDepartment}/${selectedSubject}/${Date.now()}-${file.name}`;
+      const data = await file.arrayBuffer();
+      const workbook = XLSX.read(data);
+      const sheetName = workbook.SheetNames[0];
+      if (!sheetName) throw new Error("No sheet found in the file.");
+      const worksheet = workbook.Sheets[sheetName];
+      const jsonData: any[] = XLSX.utils.sheet_to_json(worksheet);
+
+      if (jsonData.length === 0) throw new Error("The sheet is empty.");
+
+      const headers = Object.keys(jsonData[0]).map(h => h.toLowerCase());
+      const requiredHeaders = ['register number', 'subject code', 'internal mark'];
+      const missingHeaders = requiredHeaders.filter(rh => !headers.includes(rh));
+      if (missingHeaders.length > 0) {
+        throw new Error(`Missing required columns: ${missingHeaders.join(', ')}`);
+      }
+
+      const transformedData = jsonData.map(row => {
+        const newRow: Record<string, any> = {};
+        for (const key in row) {
+            newRow[key] = row[key];
+            if (key.toLowerCase() === 'register number') {
+                const registerNumber = String(row[key] || '');
+                newRow['roll number'] = registerNumber.length >= 4 
+                    ? registerNumber.slice(0, -4) + registerNumber.slice(-3) 
+                    : '';
+            }
+            if (key.toLowerCase() === 'internal mark') {
+                newRow['attendance'] = '';
+            }
+        }
+        return newRow;
+      });
+
+      const newWorksheet = XLSX.utils.json_to_sheet(transformedData);
+      const newWorkbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(newWorkbook, newWorksheet, 'ProcessedData');
+      const wbout = XLSX.write(newWorkbook, { bookType: 'xlsx', type: 'array' });
+      const blob = new Blob([wbout], { type: 'application/octet-stream' });
+      const processedFile = new File([blob], file.name, { type: blob.type });
+
+      dismissToast(toastId);
+      const uploadToastId = showLoading('Uploading sheet...');
       
-      const { error: uploadError } = await supabase.storage
-        .from('sheets')
-        .upload(filePath, file);
+      const filePath = `${selectedDepartment}/${selectedSubject}/${Date.now()}-${processedFile.name}`;
+      
+      const { error: uploadError } = await supabase.storage.from('sheets').upload(filePath, processedFile);
       if (uploadError) throw uploadError;
 
       const { error: insertError } = await supabase.from('sheets').insert({
-        sheet_name: file.name,
+        sheet_name: processedFile.name,
         file_path: filePath,
         department_id: selectedDepartment,
         subject_id: selectedSubject,
       });
       if (insertError) throw insertError;
 
-      dismissToast(toastId);
+      dismissToast(uploadToastId);
       showSuccess('Sheet uploaded successfully!');
       
-      const { data, error } = await supabase
-        .from('sheets')
-        .select('*')
-        .eq('subject_id', selectedSubject)
-        .order('created_at', { ascending: false });
-      if (!error) setSheets(data);
+      const { data: sheetsData, error: fetchError } = await supabase.from('sheets').select('*').eq('subject_id', selectedSubject).order('created_at', { ascending: false });
+      if (!fetchError) setSheets(sheetsData);
 
     } catch (error: any) {
       dismissToast(toastId);
-      showError(error.message || 'Failed to upload sheet.');
-    } finally {
-        if (fileInputRef.current) fileInputRef.current.value = "";
+      showError(error.message || 'Failed to process and upload sheet.');
     }
   };
   
@@ -271,7 +305,7 @@ const Sheets = () => {
           {selectedDepartment && selectedSubject && (
             <div className="pt-2">
               <Button onClick={() => fileInputRef.current?.click()}>Add Sheet</Button>
-              <input type="file" ref={fileInputRef} onChange={handleFileSelect} className="hidden" accept=".xlsx" />
+              <input type="file" ref={fileInputRef} onChange={handleFileChangeAndUpload} className="hidden" accept=".xlsx" />
             </div>
           )}
         </CardContent>
