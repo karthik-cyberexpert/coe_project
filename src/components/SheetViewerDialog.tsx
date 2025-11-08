@@ -29,33 +29,35 @@ interface SheetViewerDialogProps {
 
 const SheetViewerDialog = ({ isOpen, onClose, sheetData, sheetName, showDuplicateGenerator = false }: SheetViewerDialogProps) => {
   const [displayData, setDisplayData] = useState<Record<string, any>[]>([]);
-  const [duplicateCount, setDuplicateCount] = useState('1');
+  const [startNumber, setStartNumber] = useState('');
 
   useEffect(() => {
     if (isOpen) {
       setDisplayData(sheetData);
-      setDuplicateCount('1');
+      setStartNumber('');
     }
   }, [isOpen, sheetData]);
 
   const handleGenerate = () => {
-    const count = parseInt(duplicateCount, 10);
-    if (isNaN(count) || count < 1) {
-      showError("Please enter a valid number greater than 0.");
+    const startingNum = parseInt(startNumber, 10);
+    if (isNaN(startingNum)) {
+      showError("Please enter a valid starting number.");
       return;
     }
-    if (count > 1000) {
-        showError("Cannot generate more than 1000 duplicates per row.");
-        return;
-    }
 
-    const duplicated = sheetData.flatMap(row => Array(count).fill(row));
-    setDisplayData(duplicated);
+    const updatedData = sheetData.map((row, index) => {
+      const duplicateNumberKey = Object.keys(row).find(k => k.toLowerCase() === 'duplicate number') || 'duplicate number';
+      const newRow = { ...row };
+      newRow[duplicateNumberKey] = startingNum + index;
+      return newRow;
+    });
+    
+    setDisplayData(updatedData);
   };
 
   const handleReset = () => {
     setDisplayData(sheetData);
-    setDuplicateCount('1');
+    setStartNumber('');
   };
 
   if (!sheetData || sheetData.length === 0) {
@@ -111,11 +113,10 @@ const SheetViewerDialog = ({ isOpen, onClose, sheetData, sheetName, showDuplicat
             <div className="flex items-center gap-2 justify-end">
               <Input
                 type="number"
-                placeholder="No. of duplicates"
-                value={duplicateCount}
-                onChange={(e) => setDuplicateCount(e.target.value)}
+                placeholder="Starting Number"
+                value={startNumber}
+                onChange={(e) => setStartNumber(e.target.value)}
                 className="w-40"
-                min="1"
               />
               <Button onClick={handleGenerate}>Generate</Button>
               <Button variant="outline" onClick={handleReset}>Reset</Button>
