@@ -17,6 +17,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import SheetViewerDialog from '@/components/SheetViewerDialog';
+import { SheetUploadPreviewDialog } from '@/components/SheetUploadPreviewDialog';
 import * as XLSX from 'xlsx';
 
 interface Department {
@@ -27,6 +28,7 @@ interface Department {
 interface Subject {
   id: string;
   subject_name: string;
+  subject_code: string;
 }
 
 interface Sheet {
@@ -52,6 +54,12 @@ const Sheets = () => {
   const [isViewerOpen, setIsViewerOpen] = useState(false);
   const [currentSheetData, setCurrentSheetData] = useState<Record<string, any>[]>([]);
   const [currentSheetName, setCurrentSheetName] = useState('');
+
+  const [isPreviewOpen, setIsPreviewOpen] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
+  const [previewData, setPreviewData] = useState<any[]>([]);
+  const [uploadData, setUploadData] = useState<any[]>([]);
+  const [originalFileName, setOriginalFileName] = useState('');
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -83,13 +91,13 @@ const Sheets = () => {
       
       const { data, error } = await supabase
         .from('subjects')
-        .select('id, subject_name')
+        .select('id, subject_name, subject_code')
         .or(`department_id.eq.${selectedDepartment},department_id.is.null`);
 
       if (error) {
         showError('Failed to fetch subjects.');
       } else {
-        setSubjects(data);
+        setSubjects(data as Subject[]);
       }
       setLoadingSubjects(false);
     };
@@ -122,18 +130,23 @@ const Sheets = () => {
     fetchSheets();
   }, [selectedSubject]);
 
-  const handleFileChangeAndUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
-    if (fileInputRef.current) fileInputRef.current.value = ""; // Reset file input
+    if (fileInputRef.current) fileInputRef.current.value = "";
     if (!file) return;
     if (!file.name.endsWith('.xlsx')) {
         showError("Invalid file type. Please upload an .xlsx file.");
         return;
     }
+    setOriginalFileName(file.name);
 
     const toastId = showLoading('Processing sheet...');
 
     try {
+      const selectedSubjectData = subjects.find(s => s.id === selectedSubject);
+      if (!selectedSubjectData) throw new Error('Could not find selected subject details.');
+      const selectedSubjectCode = selectedSubjectData.subject_code;
+
       const data = await file.arrayBuffer();
       const workbook = XLSX.read(data);
       const sheetName = workbook.SheetNames[0];
@@ -150,12 +163,18 @@ const Sheets = () => {
         throw new Error(`Missing required columns: ${missingHeaders.join(', ')}`);
       }
 
-      const transformedData = jsonData.map(row => {
+      const processedData = jsonData.map(row => {
         const newRow: Record<string, any> = {};
-        for (const key in row) {
+        let rowSubjectCode: string | null = null;
+        
+        const originalKeys = Object.keys(row);
+        const registerNumberKey = originalKeys.find(k => k.toLowerCase() === 'register number')!;
+        const subjectCodeKey = originalKeys.find(k => k.toLowerCase() === 'subject code')!;
+
+        for (const key of originalKeys) {
             newRow[key] = row[key];
             if (key.toLowerCase() === 'register number') {
-                const registerNumber = String(row[key] || '');
+                const registerNumber = String(row[registerNumberKey] || '');
                 newRow['roll number'] = registerNumber.length >= 4 
                     ? registerNumber.slice(0, -4) + registerNumber.slice(-3) 
                     : '';
@@ -163,45 +182,75 @@ const Sheets = () => {
             if (key.toLowerCase() === 'internal mark') {
                 newRow['attendance'] = '';
             }
+            if (key.toLowerCase() === 'subject code') {
+                rowSubjectCode = String(row[subjectCodeKey] || '').trim();
+            }
         }
+        newRow.status = rowSubjectCode === selectedSubjectCode ? 'matched' : 'mismatched';
         return newRow;
       });
 
-      const newWorksheet = XLSX.utils.json_to_sheet(transformedData);
-      const newWorkbook = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(newWorkbook, newWorksheet, 'ProcessedData');
-      const wbout = XLSX.write(newWorkbook, { bookType: 'xlsx', type: 'array' });
-      const blob = new Blob([wbout], { type: 'application/octet-stream' });
-      const processedFile = new File([blob], file.name, { type: blob.type });
+      const matchedRows = processedData
+        .filter(row => row.status === 'matched')
+        .map(({ status, ...rest }) => rest);
 
+      setPreviewData(processedData);
+      setUploadData(matchedRows);
+      setIsPreviewOpen(true);
       dismissToast(toastId);
-      const uploadToastId = showLoading('Uploading sheet...');
-      
-      const filePath = `${selectedDepartment}/${selectedSubject}/${Date.now()}-${processedFile.name}`;
-      
-      const { error: uploadError } = await supabase.storage.from('sheets').upload(filePath, processedFile);
-      if (uploadError) throw uploadError;
-
-      const { error: insertError } = await supabase.from('sheets').insert({
-        sheet_name: processedFile.name,
-        file_path: filePath,
-        department_id: selectedDepartment,
-        subject_id: selectedSubject,
-      });
-      if (insertError) throw insertError;
-
-      dismissToast(uploadToastId);
-      showSuccess('Sheet uploaded successfully!');
-      
-      const { data: sheetsData, error: fetchError } = await supabase.from('sheets').select('*').eq('subject_id', selectedSubject).order('created_at', { ascending: false });
-      if (!fetchError) setSheets(sheetsData);
 
     } catch (error: any) {
       dismissToast(toastId);
-      showError(error.message || 'Failed to process and upload sheet.');
+      showError(error.message || 'Failed to process sheet.');
     }
   };
   
+  const handleConfirmUpload = async () => {
+    if (uploadData.length === 0) {
+        showError("No matched rows to upload.");
+        return;
+    }
+    setIsUploading(true);
+    const toastId = showLoading('Uploading sheet...');
+    try {
+        const newWorksheet = XLSX.utils.json_to_sheet(uploadData);
+        const newWorkbook = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(newWorkbook, newWorksheet, 'ProcessedData');
+        const wbout = XLSX.write(newWorkbook, { bookType: 'xlsx', type: 'array' });
+        const blob = new Blob([wbout], { type: 'application/octet-stream' });
+        const processedFile = new File([blob], originalFileName, { type: blob.type });
+
+        const filePath = `${selectedDepartment}/${selectedSubject}/${Date.now()}-${processedFile.name}`;
+        
+        const { error: uploadError } = await supabase.storage.from('sheets').upload(filePath, processedFile);
+        if (uploadError) throw uploadError;
+
+        const { error: insertError } = await supabase.from('sheets').insert({
+            sheet_name: processedFile.name,
+            file_path: filePath,
+            department_id: selectedDepartment,
+            subject_id: selectedSubject,
+        });
+        if (insertError) throw insertError;
+
+        dismissToast(toastId);
+        showSuccess('Sheet uploaded successfully!');
+        
+        const { data: sheetsData, error: fetchError } = await supabase.from('sheets').select('*').eq('subject_id', selectedSubject).order('created_at', { ascending: false });
+        if (!fetchError) setSheets(sheetsData);
+
+    } catch (error: any) {
+        dismissToast(toastId);
+        showError(error.message || 'Failed to upload sheet.');
+    } finally {
+        setIsUploading(false);
+        setIsPreviewOpen(false);
+        setPreviewData([]);
+        setUploadData([]);
+        setOriginalFileName('');
+    }
+  };
+
   const handleDeleteSheet = async () => {
     if (!sheetToDelete) return;
     const toastId = showLoading('Deleting sheet...');
@@ -295,7 +344,7 @@ const Sheets = () => {
                 </SelectTrigger>
                 <SelectContent>
                   {subjects.map(sub => (
-                    <SelectItem key={sub.id} value={sub.id}>{sub.subject_name}</SelectItem>
+                    <SelectItem key={sub.id} value={sub.id}>{sub.subject_name} ({sub.subject_code})</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -305,7 +354,7 @@ const Sheets = () => {
           {selectedDepartment && selectedSubject && (
             <div className="pt-2">
               <Button onClick={() => fileInputRef.current?.click()}>Add Sheet</Button>
-              <input type="file" ref={fileInputRef} onChange={handleFileChangeAndUpload} className="hidden" accept=".xlsx" />
+              <input type="file" ref={fileInputRef} onChange={handleFileSelect} className="hidden" accept=".xlsx" />
             </div>
           )}
         </CardContent>
@@ -370,6 +419,13 @@ const Sheets = () => {
         onClose={() => setIsViewerOpen(false)}
         sheetData={currentSheetData}
         sheetName={currentSheetName}
+      />
+      <SheetUploadPreviewDialog
+        isOpen={isPreviewOpen}
+        onClose={() => setIsPreviewOpen(false)}
+        onConfirm={handleConfirmUpload}
+        previewData={previewData}
+        isUploading={isUploading}
       />
     </div>
   );
