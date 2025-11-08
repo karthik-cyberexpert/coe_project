@@ -26,86 +26,6 @@ interface SheetUploadPreviewDialogProps {
   isUploading: boolean;
 }
 
-export function BulkUploadConfirmationDialog<T extends Record<string, any>>({
-  isOpen,
-  onClose,
-  onConfirm,
-  data,
-  headers,
-  isUploading,
-}: BulkUploadConfirmationDialogProps<T>) {
-  // This component is actually SheetUploadPreviewDialog, but the original file was BulkUploadConfirmationDialog
-  // I will rename the function signature to match the file name for consistency, but use the logic for SheetUploadPreviewDialog
-  // Wait, the file is named SheetUploadPreviewDialog.tsx, but the export function is BulkUploadConfirmationDialog.
-  // I will correct the export name to match the file name.
-
-  if (!previewData || previewData.length === 0) return null;
-
-  const headers = Object.keys(previewData[0]).filter(key => key !== 'status');
-  const matchedCount = previewData.filter(row => row.status === 'matched').length;
-  const mismatchedCount = previewData.length - matchedCount;
-
-  return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-[80vw] max-h-[90vh] flex flex-col">
-        <DialogHeader>
-          <DialogTitle>Upload Preview</DialogTitle>
-        </DialogHeader>
-        <div className="text-sm text-muted-foreground space-y-1">
-          <p>
-            Found <strong>{matchedCount} matched</strong> rows and <strong>{mismatchedCount} mismatched</strong> rows.
-          </p>
-          <p>Only the matched rows will be uploaded.</p>
-        </div>
-        <div className="flex-grow overflow-hidden min-h-0">
-          {/* Setting a fixed height for the scrollable area to ensure the scrollbar appears */}
-          <ScrollArea className="h-[50vh] w-full rounded-md border">
-            <div className="w-max min-w-full">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Status</TableHead>
-                    {headers.map((header) => (
-                      <TableHead key={header} className="capitalize">{header.replace(/_/g, ' ')}</TableHead>
-                    ))}
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {previewData.map((row, index) => (
-                    <TableRow key={index} className={row.status === 'mismatched' ? 'bg-red-50/50' : ''}>
-                      <TableCell>
-                        {row.status === 'matched' ? (
-                          <Badge variant="default">Matched</Badge>
-                        ) : (
-                          <Badge variant="destructive">Mismatched</Badge>
-                        )}
-                      </TableCell>
-                      {headers.map((header) => (
-                        <TableCell key={`${index}-${header}`}>{String(row[header])}</TableCell>
-                      ))}
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-          </ScrollArea>
-        </div>
-        <DialogFooter>
-          <DialogClose asChild>
-            <Button type="button" variant="secondary" onClick={onClose} disabled={isUploading}>
-              Cancel
-            </Button>
-          </DialogClose>
-          <Button onClick={onConfirm} disabled={isUploading || matchedCount === 0}>
-            {isUploading ? "Uploading..." : `Upload ${matchedCount} Rows`}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-// Correcting the export name to match the file name
 export function SheetUploadPreviewDialog({
   isOpen,
   onClose,
@@ -132,7 +52,6 @@ export function SheetUploadPreviewDialog({
           <p>Only the matched rows will be uploaded.</p>
         </div>
         <div className="flex-grow overflow-hidden min-h-0">
-          {/* Setting a fixed height for the scrollable area to ensure the scrollbar appears */}
           <ScrollArea className="h-[50vh] w-full rounded-md border">
             <div className="w-max min-w-full">
               <Table>
