@@ -11,6 +11,7 @@ import DashboardHome from "./pages/DashboardHome";
 import Departments from "./pages/Departments";
 import Sheets from "./pages/Sheets";
 import Subjects from "./pages/Subjects";
+import AdminProtectedRoute from "./components/AdminProtectedRoute";
 
 const queryClient = new QueryClient();
 
@@ -25,9 +26,11 @@ const App = () => (
           <Route path="/login" element={<Login />} />
           <Route element={<DashboardLayout />}>
             <Route path="/dashboard" element={<DashboardHome />} />
-            <Route path="/departments" element={<Departments />} />
-            <Route path="/sheets" element={<Sheets />} />
-            <Route path="/subjects" element={<Subjects />} />
+            <Route element={<AdminProtectedRoute />}>
+              <Route path="/departments" element={<Departments />} />
+              <Route path="/sheets" element={<Sheets />} />
+              <Route path="/subjects" element={<Subjects />} />
+            </Route>
           </Route>
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />

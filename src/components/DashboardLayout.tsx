@@ -3,11 +3,7 @@ import { useNavigate, Outlet } from 'react-router-dom';
 import { useEffect, useState } from 'react';
 import { User } from '@supabase/supabase-js';
 import Sidebar from '@/components/Sidebar';
-
-interface Profile {
-  full_name: string | null;
-  is_admin: boolean | null;
-}
+import { DashboardContext, Profile } from '@/contexts/DashboardContext';
 
 const DashboardLayout = () => {
   const navigate = useNavigate();
@@ -50,12 +46,14 @@ const DashboardLayout = () => {
   }
 
   return (
-    <div className="flex min-h-screen bg-gray-50">
-      <Sidebar user={user} profile={profile} onSignOut={handleSignOut} />
-      <main className="flex-1 p-6 sm:p-8">
-        <Outlet />
-      </main>
-    </div>
+    <DashboardContext.Provider value={{ user, profile }}>
+      <div className="flex min-h-screen bg-gray-50">
+        <Sidebar user={user} profile={profile} onSignOut={handleSignOut} />
+        <main className="flex-1 p-6 sm:p-8">
+          <Outlet />
+        </main>
+      </div>
+    </DashboardContext.Provider>
   );
 };
 
