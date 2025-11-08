@@ -43,9 +43,9 @@ const SheetViewerDialog = ({ isOpen, onClose, sheetData, sheetName }: SheetViewe
         <DialogHeader>
           <DialogTitle>{sheetName}</DialogTitle>
         </DialogHeader>
+        {/* Setting a fixed height for the scrollable area to ensure the scrollbar appears */}
         <div className="flex-grow overflow-hidden min-h-0">
-          {/* Added overflow-x-auto wrapper for horizontal scrolling */}
-          <ScrollArea className="h-full w-full rounded-md border">
+          <ScrollArea className="h-[50vh] w-full rounded-md border">
             <div className="w-max min-w-full">
               <Table>
                 <TableHeader>
