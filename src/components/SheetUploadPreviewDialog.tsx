@@ -51,7 +51,7 @@ export function SheetUploadPreviewDialog({
           </p>
           <p>Only the matched rows will be uploaded.</p>
         </div>
-        <div className="flex-grow overflow-hidden">
+        <div className="flex-grow overflow-hidden min-h-0">
           <ScrollArea className="h-full w-full rounded-md border">
             <Table>
               <TableHeader>
