@@ -163,8 +163,6 @@ const Sheets = () => {
         throw new Error(`Missing required columns: ${missingHeaders.join(', ')}`);
       }
 
-      const registerNumberCounts = new Map<string, number>();
-
       const processedData = jsonData.map(row => {
         const newRow: Record<string, any> = {};
         let rowSubjectCode: string | null = null;
@@ -189,9 +187,7 @@ const Sheets = () => {
             }
         }
         
-        const currentCount = (registerNumberCounts.get(registerNumber) || 0) + 1;
-        registerNumberCounts.set(registerNumber, currentCount);
-        newRow['duplicate number'] = currentCount;
+        newRow['duplicate number'] = '';
 
         newRow.status = rowSubjectCode === selectedSubjectCode ? 'matched' : 'mismatched';
         return newRow;
@@ -401,8 +397,7 @@ const Sheets = () => {
             <CardTitle>Available Sheets</CardTitle>
           </CardHeader>
           <CardContent>
-            {loadingSheets ? <p>Loading sheets...</p> : (
-              <div className="border rounded-lg">
+            {loadingSheets ? <p>Loading sheets...</p> <div className="border rounded-lg">
                 <Table>
                   <TableHeader>
                     <TableRow>
@@ -435,8 +430,7 @@ const Sheets = () => {
                     )}
                   </TableBody>
                 </Table>
-              </div>
-            )}
+              </div>}
           </CardContent>
         </Card>
       )}
