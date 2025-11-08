@@ -6,6 +6,7 @@ import Sidebar from '@/components/Sidebar';
 
 interface Profile {
   full_name: string | null;
+  is_admin: boolean | null;
 }
 
 const DashboardLayout = () => {
@@ -21,13 +22,13 @@ const DashboardLayout = () => {
         setUser(user);
         const { data: profileData, error } = await supabase
           .from('profiles')
-          .select('full_name')
+          .select('full_name, is_admin')
           .eq('id', user.id)
           .single();
 
         if (error) {
           console.error('Error fetching profile:', error);
-          setProfile({ full_name: null });
+          setProfile({ full_name: null, is_admin: false });
         } else {
           setProfile(profileData);
         }
