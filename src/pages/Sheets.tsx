@@ -5,7 +5,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { showError, showSuccess, showLoading, dismissToast } from '@/utils/toast';
-import { Eye, Trash2 } from 'lucide-react';
+import { Eye, Trash2, Download } from 'lucide-react';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -313,6 +313,34 @@ const Sheets = () => {
     }
   };
 
+  const handleDownloadSheet = async (sheet: Sheet) => {
+    const toastId = showLoading(`Preparing ${sheet.sheet_name} for download...`);
+    try {
+      const { data, error } = await supabase.storage
+        .from('sheets')
+        .download(sheet.file_path);
+
+      if (error) throw error;
+
+      // Create a URL for the blob and trigger download
+      const url = window.URL.createObjectURL(data);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = sheet.sheet_name;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+
+      dismissToast(toastId);
+      showSuccess('Download started.');
+
+    } catch (error: any) {
+      dismissToast(toastId);
+      showError(error.message || 'Failed to download sheet.');
+    }
+  };
+
   return (
     <div className="space-y-6">
       <h1 className="text-3xl font-bold">Sheets</h1>
@@ -381,7 +409,10 @@ const Sheets = () => {
                       <TableRow key={sheet.id}>
                         <TableCell className="font-medium">{sheet.sheet_name}</TableCell>
                         <TableCell>{new Date(sheet.created_at).toLocaleString()}</TableCell>
-                        <TableCell className="text-right">
+                        <TableCell className="text-right space-x-2">
+                           <Button variant="ghost" size="icon" onClick={() => handleDownloadSheet(sheet)}>
+                            <Download className="h-4 w-4" />
+                          </Button>
                            <Button variant="ghost" size="icon" onClick={() => handleViewSheet(sheet)}>
                             <Eye className="h-4 w-4" />
                           </Button>
