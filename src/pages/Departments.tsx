@@ -17,8 +17,9 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import AddDepartmentForm from "@/components/AddDepartmentForm";
-import { showError } from "@/utils/toast";
+import { showError, showSuccess, showLoading, dismissToast } from "@/utils/toast";
 import * as XLSX from 'xlsx';
+import * as z from 'zod';
 
 interface Department {
   id: string;
@@ -26,6 +27,12 @@ interface Department {
   department_code: string;
   department_name: string;
 }
+
+const departmentSchema = z.object({
+  degree: z.string({ required_error: "degree is required." }).min(1),
+  department_code: z.string({ required_error: "department_code is required." }).min(1),
+  department_name: z.string({ required_error: "department_name is required." }).min(1),
+});
 
 const Departments = () => {
   const [departments, setDepartments] = useState<Department[]>([]);
@@ -62,11 +69,51 @@ const Departments = () => {
     const file = event.target.files?.[0];
     if (!file) return;
 
-    showError("Bulk upload functionality is not yet implemented.");
-    
-    if(fileInputRef.current) {
-      fileInputRef.current.value = "";
-    }
+    const toastId = showLoading("Processing file...");
+
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+      try {
+        const data = e.target?.result;
+        const workbook = XLSX.read(data, { type: 'binary' });
+        const sheetName = workbook.SheetNames[0];
+        if (!sheetName) {
+          throw new Error("No sheet found in the file.");
+        }
+        const worksheet = workbook.Sheets[sheetName];
+        const json = XLSX.utils.sheet_to_json(worksheet);
+
+        const parsedData = z.array(departmentSchema).parse(json);
+
+        if (parsedData.length === 0) {
+          throw new Error("The file is empty or doesn't contain valid data.");
+        }
+
+        const { error } = await supabase.from('departments').insert(parsedData);
+        if (error) {
+          throw new Error(error.message);
+        }
+
+        dismissToast(toastId);
+        showSuccess(`${parsedData.length} departments uploaded successfully!`);
+        fetchDepartments();
+      } catch (error) {
+        dismissToast(toastId);
+        if (error instanceof z.ZodError) {
+          showError(`Validation failed: ${error.errors.map(e => `${e.path.join('.')} - ${e.message}`).join(', ')}`);
+        } else if (error instanceof Error) {
+          showError(`Upload failed: ${error.message}`);
+        } else {
+          showError("An unexpected error occurred during bulk upload.");
+        }
+        console.error(error);
+      } finally {
+        if (fileInputRef.current) {
+          fileInputRef.current.value = "";
+        }
+      }
+    };
+    reader.readAsBinaryString(file);
   };
 
   return (
