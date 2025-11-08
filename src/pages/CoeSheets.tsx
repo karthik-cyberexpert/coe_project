@@ -212,7 +212,7 @@ const CoeSheets = () => {
       dismissToast(toastId);
       showSuccess('Download started.');
 
-    } catch (error: any) => {
+    } catch (error: any) {
       dismissToast(toastId);
       showError(error.message || 'Failed to download sheet.');
     }
