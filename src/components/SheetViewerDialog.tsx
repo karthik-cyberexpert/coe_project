@@ -63,12 +63,38 @@ const SheetViewerDialog = ({ isOpen, onClose, sheet, sheetData, showDuplicateGen
     const toastId = showLoading("Generating and saving numbers...");
 
     try {
-      const updatedData = sheetData.map((row, index) => {
-        const duplicateNumberKey = Object.keys(row).find(k => k.toLowerCase() === 'duplicate number') || 'duplicate number';
-        const newRow = { ...row };
-        newRow[duplicateNumberKey] = startingNum + index;
-        return newRow;
-      });
+      // --- NEW SHUFFLING LOGIC ---
+      const dataToShuffle = [...sheetData];
+
+      // 1. Grouping into chunks of 5
+      const groups = [];
+      for (let i = 0; i < dataToShuffle.length; i += 5) {
+        groups.push(dataToShuffle.slice(i, i + 5));
+      }
+
+      // Helper for Fisher-Yates Shuffle
+      const shuffleArray = (array: any[]) => {
+        for (let i = array.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [array[i], array[j]] = [array[j], array[i]];
+        }
+        return array;
+      };
+
+      // 2. Shuffle the order of the groups
+      const shuffledGroups = shuffleArray(groups);
+
+      // 3. Shuffle rows within each group and then flatten the array
+      const shuffledData = shuffledGroups.map(group => shuffleArray([...group])).flat();
+
+      // 4. Assign duplicate numbers to the fully shuffled data
+      const duplicateNumberKey = (sheetData.length > 0 && Object.keys(sheetData[0]).find(k => k.toLowerCase() === 'duplicate number')) || 'duplicate number';
+      
+      const updatedData = shuffledData.map((row, index) => ({
+        ...row,
+        [duplicateNumberKey]: startingNum + index,
+      }));
+      // --- END OF NEW LOGIC ---
 
       const newWorksheet = XLSX.utils.json_to_sheet(updatedData);
       const newWorkbook = XLSX.utils.book_new();
