@@ -4,7 +4,6 @@ import {
   DialogHeader,
   DialogTitle,
   DialogFooter,
-  DialogClose,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import {
@@ -81,12 +80,10 @@ export function SheetUploadPreviewDialog({
             </Table>
           </ScrollArea>
         </div>
-        <DialogFooter className="pt-4">
-          <DialogClose asChild>
-            <Button type="button" variant="secondary" onClick={onClose} disabled={isUploading}>
-              Cancel
-            </Button>
-          </DialogClose>
+        <DialogFooter className="pt-4 sm:justify-end">
+          <Button type="button" variant="secondary" onClick={onClose} disabled={isUploading}>
+            Cancel
+          </Button>
           <Button onClick={onConfirm} disabled={isUploading || matchedCount === 0}>
             {isUploading ? "Uploading..." : `Upload ${matchedCount} Rows`}
           </Button>
