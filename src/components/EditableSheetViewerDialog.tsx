@@ -45,13 +45,16 @@ const EditableSheetViewerDialog = ({ isOpen, onClose, sheet, sheetData }: Editab
   const [editedData, setEditedData] = useState<Record<string, any>[]>([]);
   const [isSaving, setIsSaving] = useState(false);
   const [attendanceKey, setAttendanceKey] = useState<string | null>(null);
+  const [registerNumberKey, setRegisterNumberKey] = useState<string | null>(null);
 
   useEffect(() => {
     if (isOpen && sheetData.length > 0) {
       setEditedData(JSON.parse(JSON.stringify(sheetData))); // Deep copy
       const firstRowKeys = Object.keys(sheetData[0]);
-      const key = firstRowKeys.find(k => k.toLowerCase() === 'attendance') || null;
-      setAttendanceKey(key);
+      const attKey = firstRowKeys.find(k => k.toLowerCase() === 'attendance') || null;
+      const regKey = firstRowKeys.find(k => k.toLowerCase().replace(/\s/g, '') === 'registernumber') || null;
+      setAttendanceKey(attKey);
+      setRegisterNumberKey(regKey);
     }
   }, [isOpen, sheetData]);
 
@@ -113,7 +116,7 @@ const EditableSheetViewerDialog = ({ isOpen, onClose, sheet, sheetData }: Editab
     );
   }
 
-  const headers = editedData.length > 0 ? Object.keys(editedData[0]) : [];
+  const displayHeaders = [registerNumberKey, attendanceKey].filter(Boolean) as string[];
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
@@ -125,7 +128,7 @@ const EditableSheetViewerDialog = ({ isOpen, onClose, sheet, sheetData }: Editab
               <Table>
                 <TableHeader>
                   <TableRow>
-                    {headers.map((header) => (
+                    {displayHeaders.map((header) => (
                       <TableHead key={header}>{header}</TableHead>
                     ))}
                   </TableRow>
@@ -133,9 +136,9 @@ const EditableSheetViewerDialog = ({ isOpen, onClose, sheet, sheetData }: Editab
                 <TableBody>
                   {editedData.map((row, rowIndex) => (
                     <TableRow key={rowIndex}>
-                      {headers.map((header) => (
+                      {displayHeaders.map((header) => (
                         <TableCell key={`${rowIndex}-${header}`}>
-                          {header.toLowerCase() === 'attendance' ? (
+                          {attendanceKey && header.toLowerCase() === attendanceKey.toLowerCase() ? (
                             <Select
                               value={String(row[header] || 'null')}
                               onValueChange={(value) => handleAttendanceChange(rowIndex, value)}
