@@ -397,7 +397,10 @@ const Sheets = () => {
             <CardTitle>Available Sheets</CardTitle>
           </CardHeader>
           <CardContent>
-            {loadingSheets ? <p>Loading sheets...</p> <div className="border rounded-lg">
+            {loadingSheets ? (
+              <p>Loading sheets...</p>
+            ) : (
+              <div className="border rounded-lg">
                 <Table>
                   <TableHeader>
                     <TableRow>
@@ -407,30 +410,33 @@ const Sheets = () => {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {sheets.length > 0 ? sheets.map(sheet => (
-                      <TableRow key={sheet.id}>
-                        <TableCell className="font-medium">{sheet.sheet_name}</TableCell>
-                        <TableCell>{new Date(sheet.created_at).toLocaleString()}</TableCell>
-                        <TableCell className="text-right space-x-2">
-                           <Button variant="ghost" size="icon" onClick={() => handleDownloadSheet(sheet)}>
-                            <Download className="h-4 w-4" />
-                          </Button>
-                           <Button variant="ghost" size="icon" onClick={() => handleViewSheet(sheet)}>
-                            <Eye className="h-4 w-4" />
-                          </Button>
-                          <Button variant="ghost" size="icon" onClick={() => setSheetToDelete(sheet)}>
-                            <Trash2 className="h-4 w-4 text-red-600" />
-                          </Button>
-                        </TableCell>
-                      </TableRow>
-                    )) : (
+                    {sheets.length > 0 ? (
+                      sheets.map(sheet => (
+                        <TableRow key={sheet.id}>
+                          <TableCell className="font-medium">{sheet.sheet_name}</TableCell>
+                          <TableCell>{new Date(sheet.created_at).toLocaleString()}</TableCell>
+                          <TableCell className="text-right space-x-2">
+                            <Button variant="ghost" size="icon" onClick={() => handleDownloadSheet(sheet)}>
+                              <Download className="h-4 w-4" />
+                            </Button>
+                            <Button variant="ghost" size="icon" onClick={() => handleViewSheet(sheet)}>
+                              <Eye className="h-4 w-4" />
+                            </Button>
+                            <Button variant="ghost" size="icon" onClick={() => setSheetToDelete(sheet)}>
+                              <Trash2 className="h-4 w-4 text-red-600" />
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    ) : (
                       <TableRow>
                         <TableCell colSpan={3} className="text-center">No sheets found for this subject.</TableCell>
                       </TableRow>
                     )}
                   </TableBody>
                 </Table>
-              </div>}
+              </div>
+            )}
           </CardContent>
         </Card>
       )}
