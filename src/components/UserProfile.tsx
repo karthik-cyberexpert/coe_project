@@ -29,7 +29,6 @@ const UserProfile = ({ user, profile, onSignOut }: UserProfileProps) => {
         <AvatarFallback>{getInitials(profile.full_name)}</AvatarFallback>
       </Avatar>
       <p className="text-lg font-semibold text-gray-900">{profile.full_name || 'User'}</p>
-      <p className="text-sm font-medium text-gray-600 break-all">{user.email}</p>
       <Button variant="ghost" size="sm" className="mt-4" onClick={onSignOut}>
         Sign Out
       </Button>
