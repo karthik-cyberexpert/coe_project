@@ -80,8 +80,8 @@ const SheetViewerDialog = ({ isOpen, onClose, sheet, sheetData, showDuplicateGen
       const { error } = await supabase.storage
         .from('sheets')
         .update(sheet.file_path, blob, {
-          cacheControl: '3600',
-          upsert: false,
+          cacheControl: '0',
+          upsert: true,
         });
 
       if (error) throw error;
