@@ -45,6 +45,23 @@ const SubAdminSheets = () => {
   const [currentSheet, setCurrentSheet] = useState<Sheet | null>(null);
   const [currentSheetData, setCurrentSheetData] = useState<Record<string, any>[]>([]);
 
+  const fetchSheets = async () => {
+    if (!selectedSubject) return;
+    setLoadingSheets(true);
+    const { data, error } = await supabase
+      .from('sheets')
+      .select('*')
+      .eq('subject_id', selectedSubject)
+      .order('created_at', { ascending: false });
+    
+    if (error) {
+      showError('Failed to fetch sheets.');
+    } else {
+      setSheets(data);
+    }
+    setLoadingSheets(false);
+  };
+
   useEffect(() => {
     const fetchDepartments = async () => {
       setLoadingDepartments(true);
@@ -88,27 +105,6 @@ const SubAdminSheets = () => {
   }, [selectedDepartment]);
 
   useEffect(() => {
-    if (!selectedSubject) {
-      setSheets([]);
-      return;
-    }
-
-    const fetchSheets = async () => {
-      setLoadingSheets(true);
-      const { data, error } = await supabase
-        .from('sheets')
-        .select('*')
-        .eq('subject_id', selectedSubject)
-        .order('created_at', { ascending: false });
-      
-      if (error) {
-        showError('Failed to fetch sheets.');
-      } else {
-        setSheets(data);
-      }
-      setLoadingSheets(false);
-    };
-
     fetchSheets();
   }, [selectedSubject]);
 
@@ -202,6 +198,13 @@ const SubAdminSheets = () => {
     }
   };
 
+  const handleViewerClose = (didSave: boolean) => {
+    setIsViewerOpen(false);
+    if (didSave) {
+      fetchSheets();
+    }
+  };
+
   return (
     <div className="space-y-6">
       <h1 className="text-3xl font-bold">View & Edit Sheets</h1>
@@ -286,7 +289,7 @@ const SubAdminSheets = () => {
       )}
       <EditableSheetViewerDialog
         isOpen={isViewerOpen}
-        onClose={() => setIsViewerOpen(false)}
+        onClose={handleViewerClose}
         sheet={currentSheet}
         sheetData={currentSheetData}
       />

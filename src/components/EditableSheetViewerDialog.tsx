@@ -36,7 +36,7 @@ interface Sheet {
 
 interface EditableSheetViewerDialogProps {
   isOpen: boolean;
-  onClose: () => void;
+  onClose: (didSave: boolean) => void;
   sheet: Sheet | null;
   sheetData: Record<string, any>[];
 }
@@ -85,7 +85,7 @@ const EditableSheetViewerDialog = ({ isOpen, onClose, sheet, sheetData }: Editab
       const { error } = await supabase.storage
         .from('sheets')
         .update(sheet.file_path, blob, {
-          cacheControl: '0',
+          cacheControl: '0', // Instructs browsers and CDNs not to cache the file
           upsert: true,
         });
 
@@ -93,7 +93,7 @@ const EditableSheetViewerDialog = ({ isOpen, onClose, sheet, sheetData }: Editab
 
       dismissToast(toastId);
       showSuccess("Attendance saved successfully!");
-      onClose();
+      onClose(true);
 
     } catch (error: any) {
       dismissToast(toastId);
@@ -107,7 +107,7 @@ const EditableSheetViewerDialog = ({ isOpen, onClose, sheet, sheetData }: Editab
   
   if (sheetData.length === 0) {
     return (
-       <Dialog open={isOpen} onOpenChange={onClose}>
+       <Dialog open={isOpen} onOpenChange={(open) => !open && onClose(false)}>
         <DialogContent>
           <DialogHeader><DialogTitle>{sheet.sheet_name}</DialogTitle></DialogHeader>
           <p className="py-8 text-center text-muted-foreground">This sheet appears to be empty.</p>
@@ -119,7 +119,7 @@ const EditableSheetViewerDialog = ({ isOpen, onClose, sheet, sheetData }: Editab
   const displayHeaders = [registerNumberKey, attendanceKey].filter(Boolean) as string[];
 
   return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
+    <Dialog open={isOpen} onOpenChange={(open) => !open && onClose(false)}>
       <DialogContent className="sm:max-w-[80vw] max-h-[90vh] flex flex-col">
         <DialogHeader><DialogTitle>{sheet.sheet_name}</DialogTitle></DialogHeader>
         <div className="flex-grow overflow-hidden min-h-0">
