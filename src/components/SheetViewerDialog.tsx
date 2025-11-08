@@ -26,6 +26,7 @@ import { Button } from "@/components/ui/button";
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { showLoading, dismissToast, showSuccess, showError } from "@/utils/toast";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import * as XLSX from 'xlsx';
 
 interface Sheet {
@@ -48,6 +49,7 @@ const SheetViewerDialog = ({ isOpen, onClose, sheet, sheetData, showDuplicateGen
   const [startNumber, setStartNumber] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const [sortOption, setSortOption] = useState('default');
+  const [isAttendanceMarked, setIsAttendanceMarked] = useState(false);
 
   useEffect(() => {
     if (isOpen) {
@@ -69,10 +71,18 @@ const SheetViewerDialog = ({ isOpen, onClose, sheet, sheetData, showDuplicateGen
           if (duplicateNumberKey) data.sort((a, b) => (Number(b[duplicateNumberKey]) || 0) - (Number(a[duplicateNumberKey]) || 0));
           break;
         default:
-          // 'default' case, do nothing, `data` is already a copy of `sheetData`
           break;
       }
       setDisplayData(data);
+
+      if (sheetData.length > 0) {
+        const attendanceKey = Object.keys(sheetData[0]).find(k => k.toLowerCase() === 'attendance');
+        if (attendanceKey && sheetData.some(row => row[attendanceKey] && (String(row[attendanceKey]).toLowerCase() === 'present' || String(row[attendanceKey]).toLowerCase() === 'absent'))) {
+            setIsAttendanceMarked(true);
+        } else {
+            setIsAttendanceMarked(false);
+        }
+      }
     }
   }, [isOpen, sheetData, sortOption]);
 
@@ -80,7 +90,6 @@ const SheetViewerDialog = ({ isOpen, onClose, sheet, sheetData, showDuplicateGen
     if (isOpen) {
       setStartNumber('');
     } else {
-      // Reset sort option when dialog is closed
       setSortOption('default');
     }
   }, [isOpen]);
@@ -169,7 +178,20 @@ const SheetViewerDialog = ({ isOpen, onClose, sheet, sheetData, showDuplicateGen
     );
   }
 
-  const headers = displayData.length > 0 ? Object.keys(displayData[0]) : [];
+  const headers = (() => {
+    if (displayData.length === 0) return [];
+    let currentHeaders = Object.keys(displayData[0]);
+    const attendanceKey = currentHeaders.find(k => k.toLowerCase() === 'attendance');
+    const duplicateNumberKey = currentHeaders.find(k => k.toLowerCase().replace(/\s/g, '') === 'duplicatenumber');
+    
+    const attendanceIsSet = attendanceKey && displayData.some(row => row[attendanceKey]);
+    const duplicateIsSet = duplicateNumberKey && displayData.some(row => row[duplicateNumberKey]);
+
+    if (!attendanceIsSet || !duplicateIsSet) {
+        currentHeaders = currentHeaders.filter(h => h.toLowerCase() !== 'external mark');
+    }
+    return currentHeaders;
+  })();
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
@@ -227,9 +249,22 @@ const SheetViewerDialog = ({ isOpen, onClose, sheet, sheetData, showDuplicateGen
                 className="w-40"
                 disabled={isSaving}
               />
-              <Button onClick={handleGenerateAndSave} disabled={isSaving}>
-                {isSaving ? 'Saving...' : 'Generate & Save'}
-              </Button>
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <div className="inline-block">
+                      <Button onClick={handleGenerateAndSave} disabled={isSaving || !isAttendanceMarked}>
+                        {isSaving ? 'Saving...' : 'Generate & Save'}
+                      </Button>
+                    </div>
+                  </TooltipTrigger>
+                  {!isAttendanceMarked && (
+                    <TooltipContent>
+                      <p>Attendance must be marked before generating numbers.</p>
+                    </TooltipContent>
+                  )}
+                </Tooltip>
+              </TooltipProvider>
               <Button variant="outline" onClick={handleReset} disabled={isSaving}>
                 Reset
               </Button>

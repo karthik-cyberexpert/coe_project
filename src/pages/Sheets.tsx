@@ -5,7 +5,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { showError, showSuccess, showLoading, dismissToast } from '@/utils/toast';
-import { Eye, Trash2, Download } from 'lucide-react';
+import { Eye, Trash2, Download, Edit } from 'lucide-react';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -16,8 +16,10 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import SheetViewerDialog from '@/components/SheetViewerDialog';
 import { SheetUploadPreviewDialog } from '@/components/SheetUploadPreviewDialog';
+import EditSheetForm from '@/components/EditSheetForm';
 import * as XLSX from 'xlsx';
 
 interface Department {
@@ -31,11 +33,13 @@ interface Subject {
   subject_code: string;
 }
 
-interface Sheet {
+export interface Sheet {
   id: string;
   sheet_name: string;
   file_path: string;
   created_at: string;
+  start_date?: string | null;
+  end_date?: string | null;
 }
 
 const Sheets = () => {
@@ -50,6 +54,7 @@ const Sheets = () => {
   const [loadingSubjects, setLoadingSubjects] = useState(false);
   const [loadingSheets, setLoadingSheets] = useState(false);
   const [sheetToDelete, setSheetToDelete] = useState<Sheet | null>(null);
+  const [sheetToEdit, setSheetToEdit] = useState<Sheet | null>(null);
   
   const [isViewerOpen, setIsViewerOpen] = useState(false);
   const [currentSheet, setCurrentSheet] = useState<Sheet | null>(null);
@@ -62,6 +67,23 @@ const Sheets = () => {
   const [originalFileName, setOriginalFileName] = useState('');
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const fetchSheets = async () => {
+    if (!selectedSubject) return;
+    setLoadingSheets(true);
+    const { data, error } = await supabase
+      .from('sheets')
+      .select('*')
+      .eq('subject_id', selectedSubject)
+      .order('created_at', { ascending: false });
+    
+    if (error) {
+      showError('Failed to fetch sheets.');
+    } else {
+      setSheets(data);
+    }
+    setLoadingSheets(false);
+  };
 
   useEffect(() => {
     const fetchDepartments = async () => {
@@ -106,27 +128,6 @@ const Sheets = () => {
   }, [selectedDepartment]);
 
   useEffect(() => {
-    if (!selectedSubject) {
-      setSheets([]);
-      return;
-    }
-
-    const fetchSheets = async () => {
-      setLoadingSheets(true);
-      const { data, error } = await supabase
-        .from('sheets')
-        .select('*')
-        .eq('subject_id', selectedSubject)
-        .order('created_at', { ascending: false });
-      
-      if (error) {
-        showError('Failed to fetch sheets.');
-      } else {
-        setSheets(data);
-      }
-      setLoadingSheets(false);
-    };
-
     fetchSheets();
   }, [selectedSubject]);
 
@@ -179,15 +180,14 @@ const Sheets = () => {
                     ? registerNumber.slice(0, -4) + registerNumber.slice(-3) 
                     : '';
             }
-            if (key.toLowerCase() === 'internal mark') {
-                newRow['attendance'] = '';
-            }
             if (key.toLowerCase() === 'subject code') {
                 rowSubjectCode = String(row[subjectCodeKey] || '').trim();
             }
         }
         
+        newRow['attendance'] = '';
         newRow['duplicate number'] = '';
+        newRow['external mark'] = '';
 
         newRow.status = rowSubjectCode === selectedSubjectCode ? 'matched' : 'mismatched';
         return newRow;
@@ -238,9 +238,7 @@ const Sheets = () => {
 
         dismissToast(toastId);
         showSuccess('Sheet uploaded successfully!');
-        
-        const { data: sheetsData, error: fetchError } = await supabase.from('sheets').select('*').eq('subject_id', selectedSubject).order('created_at', { ascending: false });
-        if (!fetchError) setSheets(sheetsData);
+        fetchSheets();
 
     } catch (error: any) {
         dismissToast(toastId);
@@ -325,7 +323,6 @@ const Sheets = () => {
 
       if (error) throw error;
 
-      // Create a URL for the blob and trigger download
       const url = window.URL.createObjectURL(data);
       const a = document.createElement('a');
       a.href = url;
@@ -422,6 +419,9 @@ const Sheets = () => {
                             <Button variant="ghost" size="icon" onClick={() => handleViewSheet(sheet)}>
                               <Eye className="h-4 w-4" />
                             </Button>
+                            <Button variant="ghost" size="icon" onClick={() => setSheetToEdit(sheet)}>
+                              <Edit className="h-4 w-4" />
+                            </Button>
                             <Button variant="ghost" size="icon" onClick={() => setSheetToDelete(sheet)}>
                               <Trash2 className="h-4 w-4 text-red-600" />
                             </Button>
@@ -452,6 +452,12 @@ const Sheets = () => {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+      <Dialog open={!!sheetToEdit} onOpenChange={(isOpen) => !isOpen && setSheetToEdit(null)}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Edit Sheet Dates</DialogTitle></DialogHeader>
+          {sheetToEdit && <EditSheetForm sheet={sheetToEdit} onSuccess={() => { setSheetToEdit(null); fetchSheets(); }} />}
+        </DialogContent>
+      </Dialog>
       <SheetViewerDialog
         isOpen={isViewerOpen}
         onClose={() => setIsViewerOpen(false)}

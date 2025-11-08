@@ -25,6 +25,8 @@ interface Sheet {
   sheet_name: string;
   file_path: string;
   created_at: string;
+  start_date?: string | null;
+  end_date?: string | null;
 }
 
 const CoeSheets = () => {
@@ -110,7 +112,28 @@ const CoeSheets = () => {
     fetchSheets();
   }, [selectedSubject]);
 
+  const checkDateAvailability = (sheet: Sheet) => {
+    const now = new Date();
+    const startDate = sheet.start_date ? new Date(sheet.start_date) : null;
+    const endDate = sheet.end_date ? new Date(sheet.end_date) : null;
+
+    if (startDate && now < startDate) {
+      showError(`This sheet is not available until ${startDate.toLocaleString()}.`);
+      return false;
+    }
+    if (endDate) {
+      endDate.setHours(23, 59, 59, 999); // Make end date inclusive
+    }
+    if (endDate && now > endDate) {
+      showError(`This sheet is no longer available after ${endDate.toLocaleString()}.`);
+      return false;
+    }
+    return true;
+  };
+
   const handleViewSheet = async (sheet: Sheet) => {
+    if (!checkDateAvailability(sheet)) return;
+
     const toastId = showLoading(`Loading ${sheet.sheet_name}...`);
     try {
       const { data, error } = await supabase.storage
@@ -151,6 +174,8 @@ const CoeSheets = () => {
   };
 
   const handleDownloadSheet = async (sheet: Sheet) => {
+    if (!checkDateAvailability(sheet)) return;
+
     const toastId = showLoading(`Preparing ${sheet.sheet_name} for download...`);
     try {
       const { data, error } = await supabase.storage
