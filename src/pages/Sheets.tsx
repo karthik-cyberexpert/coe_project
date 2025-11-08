@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -68,8 +68,11 @@ const Sheets = () => {
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const fetchSheets = async () => {
-    if (!selectedSubject) return;
+  const fetchSheets = useCallback(async () => {
+    if (!selectedSubject) {
+      setSheets([]);
+      return;
+    }
     setLoadingSheets(true);
     const { data, error } = await supabase
       .from('sheets')
@@ -83,7 +86,7 @@ const Sheets = () => {
       setSheets(data);
     }
     setLoadingSheets(false);
-  };
+  }, [selectedSubject]);
 
   useEffect(() => {
     const fetchDepartments = async () => {
@@ -129,7 +132,24 @@ const Sheets = () => {
 
   useEffect(() => {
     fetchSheets();
-  }, [selectedSubject]);
+  }, [fetchSheets]);
+
+  useEffect(() => {
+    const channel = supabase
+      .channel('public-sheets-admin')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'sheets' },
+        () => {
+          fetchSheets();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [fetchSheets]);
 
   const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];

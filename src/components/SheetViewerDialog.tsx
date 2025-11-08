@@ -135,14 +135,22 @@ const SheetViewerDialog = ({ isOpen, onClose, sheet, sheetData, showDuplicateGen
       const wbout = XLSX.write(newWorkbook, { bookType: 'xlsx', type: 'array' });
       const blob = new Blob([wbout], { type: 'application/octet-stream' });
       
-      const { error } = await supabase.storage
+      const { error: storageError } = await supabase.storage
         .from('sheets')
         .update(sheet.file_path, blob, {
           cacheControl: '0',
           upsert: true,
         });
 
-      if (error) throw error;
+      if (storageError) throw storageError;
+
+      // "Touch" the database row to trigger the updated_at timestamp and realtime event
+      const { error: dbError } = await supabase
+        .from('sheets')
+        .update({ sheet_name: sheet.sheet_name }) // an arbitrary update
+        .eq('id', sheet.id);
+
+      if (dbError) throw dbError;
 
       setDisplayData(updatedData);
       dismissToast(toastId);

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -45,6 +45,26 @@ const CoeSheets = () => {
   const [currentSheet, setCurrentSheet] = useState<Sheet | null>(null);
   const [currentSheetData, setCurrentSheetData] = useState<Record<string, any>[]>([]);
 
+  const fetchSheets = useCallback(async () => {
+    if (!selectedSubject) {
+      setSheets([]);
+      return;
+    }
+    setLoadingSheets(true);
+    const { data, error } = await supabase
+      .from('sheets')
+      .select('*')
+      .eq('subject_id', selectedSubject)
+      .order('created_at', { ascending: false });
+    
+    if (error) {
+      showError('Failed to fetch sheets.');
+    } else {
+      setSheets(data);
+    }
+    setLoadingSheets(false);
+  }, [selectedSubject]);
+
   useEffect(() => {
     const fetchDepartments = async () => {
       setLoadingDepartments(true);
@@ -88,29 +108,25 @@ const CoeSheets = () => {
   }, [selectedDepartment]);
 
   useEffect(() => {
-    if (!selectedSubject) {
-      setSheets([]);
-      return;
-    }
-
-    const fetchSheets = async () => {
-      setLoadingSheets(true);
-      const { data, error } = await supabase
-        .from('sheets')
-        .select('*')
-        .eq('subject_id', selectedSubject)
-        .order('created_at', { ascending: false });
-      
-      if (error) {
-        showError('Failed to fetch sheets.');
-      } else {
-        setSheets(data);
-      }
-      setLoadingSheets(false);
-    };
-
     fetchSheets();
-  }, [selectedSubject]);
+  }, [fetchSheets]);
+
+  useEffect(() => {
+    const channel = supabase
+      .channel('public-sheets-coe')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'sheets' },
+        () => {
+          fetchSheets();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [fetchSheets]);
 
   const checkDateAvailability = (sheet: Sheet) => {
     const now = new Date();
@@ -196,7 +212,7 @@ const CoeSheets = () => {
       dismissToast(toastId);
       showSuccess('Download started.');
 
-    } catch (error: any) {
+    } catch (error: any) => {
       dismissToast(toastId);
       showError(error.message || 'Failed to download sheet.');
     }
