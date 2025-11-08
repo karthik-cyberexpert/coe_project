@@ -4,6 +4,7 @@ import { User } from '@supabase/supabase-js';
 export interface Profile {
   full_name: string | null;
   is_admin: boolean | null;
+  is_ceo: boolean | null;
 }
 
 export interface DashboardContextType {

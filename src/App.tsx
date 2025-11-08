@@ -12,6 +12,8 @@ import Departments from "./pages/Departments";
 import Sheets from "./pages/Sheets";
 import Subjects from "./pages/Subjects";
 import AdminProtectedRoute from "./components/AdminProtectedRoute";
+import CoeProtectedRoute from "./components/CoeProtectedRoute";
+import CoeSheets from "./pages/CoeSheets";
 
 const queryClient = new QueryClient();
 
@@ -30,6 +32,9 @@ const App = () => (
               <Route path="/departments" element={<Departments />} />
               <Route path="/sheets" element={<Sheets />} />
               <Route path="/subjects" element={<Subjects />} />
+            </Route>
+            <Route element={<CoeProtectedRoute />}>
+              <Route path="/coe-sheets" element={<CoeSheets />} />
             </Route>
           </Route>
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
