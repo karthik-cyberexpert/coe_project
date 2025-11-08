@@ -264,6 +264,7 @@ const CoeSheets = () => {
         onClose={() => setIsViewerOpen(false)}
         sheetData={currentSheetData}
         sheetName={currentSheetName}
+        showDuplicateGenerator={true}
       />
     </div>
   );

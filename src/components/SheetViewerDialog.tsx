@@ -3,6 +3,7 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogFooter,
 } from "@/components/ui/dialog";
 import {
   Table,
@@ -13,15 +14,50 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { useState, useEffect } from "react";
+import { showError } from "@/utils/toast";
 
 interface SheetViewerDialogProps {
   isOpen: boolean;
   onClose: () => void;
   sheetData: Record<string, any>[];
   sheetName: string;
+  showDuplicateGenerator?: boolean;
 }
 
-const SheetViewerDialog = ({ isOpen, onClose, sheetData, sheetName }: SheetViewerDialogProps) => {
+const SheetViewerDialog = ({ isOpen, onClose, sheetData, sheetName, showDuplicateGenerator = false }: SheetViewerDialogProps) => {
+  const [displayData, setDisplayData] = useState<Record<string, any>[]>([]);
+  const [duplicateCount, setDuplicateCount] = useState('1');
+
+  useEffect(() => {
+    if (isOpen) {
+      setDisplayData(sheetData);
+      setDuplicateCount('1');
+    }
+  }, [isOpen, sheetData]);
+
+  const handleGenerate = () => {
+    const count = parseInt(duplicateCount, 10);
+    if (isNaN(count) || count < 1) {
+      showError("Please enter a valid number greater than 0.");
+      return;
+    }
+    if (count > 1000) {
+        showError("Cannot generate more than 1000 duplicates per row.");
+        return;
+    }
+
+    const duplicated = sheetData.flatMap(row => Array(count).fill(row));
+    setDisplayData(duplicated);
+  };
+
+  const handleReset = () => {
+    setDisplayData(sheetData);
+    setDuplicateCount('1');
+  };
+
   if (!sheetData || sheetData.length === 0) {
     return (
        <Dialog open={isOpen} onOpenChange={onClose}>
@@ -35,7 +71,7 @@ const SheetViewerDialog = ({ isOpen, onClose, sheetData, sheetName }: SheetViewe
     );
   }
 
-  const headers = Object.keys(sheetData[0]);
+  const headers = displayData.length > 0 ? Object.keys(displayData[0]) : [];
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
@@ -43,7 +79,6 @@ const SheetViewerDialog = ({ isOpen, onClose, sheetData, sheetName }: SheetViewe
         <DialogHeader>
           <DialogTitle>{sheetName}</DialogTitle>
         </DialogHeader>
-        {/* Setting a fixed height for the scrollable area to ensure the scrollbar appears */}
         <div className="flex-grow overflow-hidden min-h-0">
           <ScrollArea className="h-[50vh] w-full rounded-md border">
             <div className="w-max min-w-full">
@@ -56,7 +91,7 @@ const SheetViewerDialog = ({ isOpen, onClose, sheetData, sheetName }: SheetViewe
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {sheetData.map((row, rowIndex) => (
+                  {displayData.map((row, rowIndex) => (
                     <TableRow key={rowIndex}>
                       {headers.map((header) => (
                         <TableCell key={`${rowIndex}-${header}`}>{String(row[header])}</TableCell>
@@ -68,6 +103,25 @@ const SheetViewerDialog = ({ isOpen, onClose, sheetData, sheetName }: SheetViewe
             </div>
           </ScrollArea>
         </div>
+        {showDuplicateGenerator && (
+          <DialogFooter className="pt-4 border-t flex-col sm:flex-row sm:justify-between">
+             <div className="text-sm text-muted-foreground mb-2 sm:mb-0">
+              Displaying {displayData.length} of {sheetData.length} original rows.
+            </div>
+            <div className="flex items-center gap-2 justify-end">
+              <Input
+                type="number"
+                placeholder="No. of duplicates"
+                value={duplicateCount}
+                onChange={(e) => setDuplicateCount(e.target.value)}
+                className="w-40"
+                min="1"
+              />
+              <Button onClick={handleGenerate}>Generate</Button>
+              <Button variant="outline" onClick={handleReset}>Reset</Button>
+            </div>
+          </DialogFooter>
+        )}
       </DialogContent>
     </Dialog>
   );
