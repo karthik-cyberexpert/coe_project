@@ -44,25 +44,28 @@ const SheetViewerDialog = ({ isOpen, onClose, sheetData, sheetName }: SheetViewe
           <DialogTitle>{sheetName}</DialogTitle>
         </DialogHeader>
         <div className="flex-grow overflow-hidden min-h-0">
+          {/* Added overflow-x-auto wrapper for horizontal scrolling */}
           <ScrollArea className="h-full w-full rounded-md border">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  {headers.map((header) => (
-                    <TableHead key={header}>{header}</TableHead>
-                  ))}
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {sheetData.map((row, rowIndex) => (
-                  <TableRow key={rowIndex}>
+            <div className="w-max min-w-full">
+              <Table>
+                <TableHeader>
+                  <TableRow>
                     {headers.map((header) => (
-                      <TableCell key={`${rowIndex}-${header}`}>{String(row[header])}</TableCell>
+                      <TableHead key={header}>{header}</TableHead>
                     ))}
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                </TableHeader>
+                <TableBody>
+                  {sheetData.map((row, rowIndex) => (
+                    <TableRow key={rowIndex}>
+                      {headers.map((header) => (
+                        <TableCell key={`${rowIndex}-${header}`}>{String(row[header])}</TableCell>
+                      ))}
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
           </ScrollArea>
         </div>
       </DialogContent>

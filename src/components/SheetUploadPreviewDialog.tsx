@@ -52,33 +52,36 @@ export function SheetUploadPreviewDialog({
           <p>Only the matched rows will be uploaded.</p>
         </div>
         <div className="flex-grow overflow-hidden min-h-0">
+          {/* Added overflow-x-auto wrapper for horizontal scrolling */}
           <ScrollArea className="h-full w-full rounded-md border">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Status</TableHead>
-                  {headers.map((header) => (
-                    <TableHead key={header} className="capitalize">{header.replace(/_/g, ' ')}</TableHead>
-                  ))}
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {previewData.map((row, index) => (
-                  <TableRow key={index} className={row.status === 'mismatched' ? 'bg-red-50/50' : ''}>
-                    <TableCell>
-                      {row.status === 'matched' ? (
-                        <Badge variant="default">Matched</Badge>
-                      ) : (
-                        <Badge variant="destructive">Mismatched</Badge>
-                      )}
-                    </TableCell>
+            <div className="w-max min-w-full">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Status</TableHead>
                     {headers.map((header) => (
-                      <TableCell key={`${index}-${header}`}>{String(row[header])}</TableCell>
+                      <TableHead key={header} className="capitalize">{header.replace(/_/g, ' ')}</TableHead>
                     ))}
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                </TableHeader>
+                <TableBody>
+                  {previewData.map((row, index) => (
+                    <TableRow key={index} className={row.status === 'mismatched' ? 'bg-red-50/50' : ''}>
+                      <TableCell>
+                        {row.status === 'matched' ? (
+                          <Badge variant="default">Matched</Badge>
+                        ) : (
+                          <Badge variant="destructive">Mismatched</Badge>
+                        )}
+                      </TableCell>
+                      {headers.map((header) => (
+                        <TableCell key={`${index}-${header}`}>{String(row[header])}</TableCell>
+                      ))}
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
           </ScrollArea>
         </div>
         <DialogFooter>
