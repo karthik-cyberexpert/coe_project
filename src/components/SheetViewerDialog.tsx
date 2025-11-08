@@ -43,7 +43,7 @@ const SheetViewerDialog = ({ isOpen, onClose, sheetData, sheetName }: SheetViewe
         <DialogHeader>
           <DialogTitle>{sheetName}</DialogTitle>
         </DialogHeader>
-        <div className="flex-grow overflow-hidden">
+        <div className="flex-grow overflow-hidden min-h-0">
           <ScrollArea className="h-full w-full rounded-md border">
             <Table>
               <TableHeader>
