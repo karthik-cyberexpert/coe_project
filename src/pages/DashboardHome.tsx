@@ -4,11 +4,16 @@ import { DashboardContext, Profile } from '@/contexts/DashboardContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { showError } from '@/utils/toast';
+import { showError, showLoading, dismissToast, showSuccess } from '@/utils/toast';
+import SheetViewerDialog from '@/components/SheetViewerDialog';
+import EditableSheetViewerDialog from '@/components/EditableSheetViewerDialog';
+import StaffSheetViewerDialog from '@/components/StaffSheetViewerDialog';
+import * as XLSX from 'xlsx';
 
 interface SheetWithDept {
   id: string;
   sheet_name: string;
+  file_path: string;
   attendance_marked: boolean;
   duplicates_generated: boolean;
   external_marks_added: boolean;
@@ -23,22 +28,26 @@ const DashboardHome = () => {
   const [sheets, setSheets] = useState<SheetWithDept[]>([]);
   const [loading, setLoading] = useState(true);
 
+  const [viewingSheet, setViewingSheet] = useState<SheetWithDept | null>(null);
+  const [sheetContent, setSheetContent] = useState<Record<string, any>[]>([]);
+  const [isViewerOpen, setIsViewerOpen] = useState(false);
+
+  const fetchSheets = async () => {
+    setLoading(true);
+    const { data, error } = await supabase
+      .from('sheets')
+      .select('*, departments(degree, department_name)')
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      showError('Failed to fetch sheet statuses.');
+    } else {
+      setSheets(data as any[]);
+    }
+    setLoading(false);
+  };
+
   useEffect(() => {
-    const fetchSheets = async () => {
-      setLoading(true);
-      const { data, error } = await supabase
-        .from('sheets')
-        .select('*, departments(degree, department_name)')
-        .order('created_at', { ascending: false });
-
-      if (error) {
-        showError('Failed to fetch sheet statuses.');
-      } else {
-        setSheets(data as any[]);
-      }
-      setLoading(false);
-    };
-
     fetchSheets();
   }, []);
 
@@ -74,6 +83,52 @@ const DashboardHome = () => {
     return <Badge variant={variant} className={variant === 'default' ? 'bg-green-500' : 'bg-yellow-500'}>{text}</Badge>;
   };
 
+  const handleRowClick = async (sheet: SheetWithDept) => {
+    if (!profile) return;
+
+    const toastId = showLoading(`Loading ${sheet.sheet_name}...`);
+    try {
+      const { data, error } = await supabase.storage
+        .from('sheets')
+        .download(sheet.file_path);
+
+      if (error) throw error;
+
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        try {
+          const arrayBuffer = e.target?.result;
+          const workbook = XLSX.read(arrayBuffer, { type: 'array' });
+          const sheetName = workbook.SheetNames[0];
+          if (!sheetName) throw new Error("No sheet found in the file.");
+          const worksheet = workbook.Sheets[sheetName];
+          const json = XLSX.utils.sheet_to_json(worksheet);
+          
+          setSheetContent(json);
+          setViewingSheet(sheet);
+          setIsViewerOpen(true);
+          dismissToast(toastId);
+        } catch (parseError: any) {
+          dismissToast(toastId);
+          showError(`Failed to parse sheet: ${parseError.message}`);
+        }
+      };
+      reader.readAsArrayBuffer(data);
+    } catch (error: any) {
+      dismissToast(toastId);
+      showError(error.message || 'Failed to download sheet.');
+    }
+  };
+
+  const handleCloseViewer = (didSave: boolean) => {
+    setIsViewerOpen(false);
+    setViewingSheet(null);
+    setSheetContent([]);
+    if (didSave) {
+      fetchSheets();
+    }
+  };
+
   if (loading) {
     return <div>Loading dashboard...</div>;
   }
@@ -100,7 +155,7 @@ const DashboardHome = () => {
               </TableHeader>
               <TableBody>
                 {sheets.length > 0 ? sheets.map((sheet) => (
-                  <TableRow key={sheet.id}>
+                  <TableRow key={sheet.id} onClick={() => handleRowClick(sheet)} className="cursor-pointer hover:bg-gray-50">
                     <TableCell className="font-medium">{sheet.sheet_name}</TableCell>
                     <TableCell>{sheet.departments?.degree || 'N/A'}</TableCell>
                     <TableCell>{sheet.departments?.department_name || 'N/A'}</TableCell>
@@ -116,6 +171,32 @@ const DashboardHome = () => {
           </div>
         </CardContent>
       </Card>
+
+      {profile?.is_admin || profile?.is_ceo ? (
+        <SheetViewerDialog
+            isOpen={isViewerOpen && !!viewingSheet}
+            onClose={handleCloseViewer}
+            sheet={viewingSheet}
+            sheetData={sheetContent}
+            showDuplicateGenerator={profile.is_ceo}
+        />
+      ) : null}
+      {profile?.is_sub_admin ? (
+        <EditableSheetViewerDialog
+            isOpen={isViewerOpen && !!viewingSheet}
+            onClose={handleCloseViewer}
+            sheet={viewingSheet}
+            sheetData={sheetContent}
+        />
+      ) : null}
+      {profile?.is_staff && !profile.is_admin && !profile.is_ceo && !profile.is_sub_admin ? (
+        <StaffSheetViewerDialog
+            isOpen={isViewerOpen && !!viewingSheet}
+            onClose={handleCloseViewer}
+            sheet={viewingSheet}
+            sheetData={sheetContent}
+        />
+      ) : null}
     </div>
   );
 };
