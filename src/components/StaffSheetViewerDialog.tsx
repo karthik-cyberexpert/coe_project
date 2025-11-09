@@ -41,24 +41,33 @@ const StaffSheetViewerDialog = ({ isOpen, onClose, sheet, sheetData }: StaffShee
   const [isSaving, setIsSaving] = useState(false);
   const [duplicateNumberKey, setDuplicateNumberKey] = useState<string | null>(null);
   const [externalMarkKey, setExternalMarkKey] = useState<string | null>(null);
+  const [currentSheet, setCurrentSheet] = useState<Sheet | null>(null);
+  const [hasSaved, setHasSaved] = useState(false);
 
   useEffect(() => {
-    if (isOpen && sheetData.length > 0) {
-      const firstRowKeys = Object.keys(sheetData[0]);
-      const attendanceKey = firstRowKeys.find(k => k.toLowerCase() === 'attendance');
-      
-      const presentStudents = attendanceKey
-        ? sheetData.filter(row => String(row[attendanceKey]).trim().toLowerCase() === 'present')
-        : sheetData;
+    if (isOpen && sheet) {
+      setCurrentSheet(JSON.parse(JSON.stringify(sheet)));
+      setHasSaved(false);
 
-      setEditedData(JSON.parse(JSON.stringify(presentStudents)));
-      
-      const dupKey = firstRowKeys.find(k => k.toLowerCase().replace(/\s/g, '') === 'duplicatenumber') || null;
-      const extKey = firstRowKeys.find(k => k.toLowerCase().replace(/\s/g, '') === 'externalmark') || null;
-      setDuplicateNumberKey(dupKey);
-      setExternalMarkKey(extKey);
+      if (sheetData.length > 0) {
+        const firstRowKeys = Object.keys(sheetData[0]);
+        const attendanceKey = firstRowKeys.find(k => k.toLowerCase() === 'attendance');
+        
+        const presentStudents = attendanceKey
+          ? sheetData.filter(row => String(row[attendanceKey]).trim().toLowerCase() === 'present')
+          : sheetData;
+
+        setEditedData(JSON.parse(JSON.stringify(presentStudents)));
+        
+        const dupKey = firstRowKeys.find(k => k.toLowerCase().replace(/\s/g, '') === 'duplicatenumber') || null;
+        const extKey = firstRowKeys.find(k => k.toLowerCase().replace(/\s/g, '') === 'externalmark') || null;
+        setDuplicateNumberKey(dupKey);
+        setExternalMarkKey(extKey);
+      } else {
+        setEditedData([]);
+      }
     }
-  }, [isOpen, sheetData]);
+  }, [isOpen, sheet, sheetData]);
 
   const handleMarkChange = (rowIndex: number, value: string) => {
     if (!externalMarkKey) return;
@@ -75,7 +84,7 @@ const StaffSheetViewerDialog = ({ isOpen, onClose, sheet, sheetData }: StaffShee
   };
 
   const handleSaveChanges = async () => {
-    if (!sheet || !externalMarkKey || !duplicateNumberKey) {
+    if (!currentSheet || !externalMarkKey || !duplicateNumberKey) {
       showError("Sheet information is missing or malformed. Cannot save.");
       return;
     }
@@ -104,27 +113,31 @@ const StaffSheetViewerDialog = ({ isOpen, onClose, sheet, sheetData }: StaffShee
       
       const { error: storageError } = await supabase.storage
         .from('sheets')
-        .update(sheet.file_path, blob, {
+        .update(currentSheet.file_path, blob, {
           cacheControl: '0',
           upsert: true,
         });
 
       if (storageError) throw storageError;
 
-      const allMarked = updatedSheetData.every(row => 
+      const allMarked = editedData.every(row => 
         row[externalMarkKey] !== null && row[externalMarkKey] !== undefined && String(row[externalMarkKey]).trim() !== ''
       );
 
-      const { error: dbError } = await supabase
-        .from('sheets')
-        .update({ external_marks_added: allMarked })
-        .eq('id', sheet.id);
+      if (allMarked) {
+        const { error: dbError } = await supabase
+          .from('sheets')
+          .update({ external_marks_added: true })
+          .eq('id', currentSheet.id);
 
-      if (dbError) throw dbError;
+        if (dbError) throw dbError;
+        
+        setCurrentSheet(prev => prev ? { ...prev, external_marks_added: true } : null);
+      }
 
+      setHasSaved(true);
       dismissToast(toastId);
       showSuccess("External marks saved successfully!");
-      onClose(true);
 
     } catch (error: any) {
       dismissToast(toastId);
@@ -134,13 +147,13 @@ const StaffSheetViewerDialog = ({ isOpen, onClose, sheet, sheetData }: StaffShee
     }
   };
 
+  const isReadOnly = currentSheet?.external_marks_added;
+
   if (!sheet || !sheetData) return null;
   
-  const isReadOnly = sheet.external_marks_added;
-
   if (sheetData.length === 0 || !duplicateNumberKey || !externalMarkKey) {
     return (
-       <Dialog open={isOpen} onOpenChange={(open) => !open && onClose(false)}>
+       <Dialog open={isOpen} onOpenChange={(open) => !open && onClose(hasSaved)}>
         <DialogContent>
           <DialogHeader><DialogTitle>{sheet.sheet_name}</DialogTitle></DialogHeader>
           <p className="py-8 text-center text-muted-foreground">
@@ -152,9 +165,9 @@ const StaffSheetViewerDialog = ({ isOpen, onClose, sheet, sheetData }: StaffShee
   }
 
   return (
-    <Dialog open={isOpen} onOpenChange={(open) => !open && onClose(false)}>
+    <Dialog open={isOpen} onOpenChange={(open) => !open && onClose(hasSaved)}>
       <DialogContent className="sm:max-w-[600px] max-h-[90vh] flex flex-col">
-        <DialogHeader><DialogTitle>{sheet.sheet_name}</DialogTitle></DialogHeader>
+        <DialogHeader><DialogTitle>{currentSheet?.sheet_name}</DialogTitle></DialogHeader>
         <div className="flex-grow overflow-hidden min-h-0">
           <ScrollArea className="h-[60vh] w-full rounded-md border">
             <Table>
@@ -186,8 +199,9 @@ const StaffSheetViewerDialog = ({ isOpen, onClose, sheet, sheetData }: StaffShee
           </ScrollArea>
         </div>
         <DialogFooter>
+          <Button variant="outline" onClick={() => onClose(hasSaved)}>Close</Button>
           <Button onClick={handleSaveChanges} disabled={isSaving || isReadOnly}>
-            {isSaving ? 'Saving...' : isReadOnly ? 'Saved' : 'Save Changes'}
+            {isSaving ? 'Saving...' : isReadOnly ? 'Finished' : 'Save Changes'}
           </Button>
         </DialogFooter>
       </DialogContent>
