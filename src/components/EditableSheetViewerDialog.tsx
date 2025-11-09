@@ -62,7 +62,7 @@ const EditableSheetViewerDialog = ({ isOpen, onClose, sheet, sheetData }: Editab
   const handleAttendanceChange = (rowIndex: number, value: string) => {
     if (!attendanceKey) return;
     const newData = [...editedData];
-    newData[rowIndex][attendanceKey] = value === 'null' ? '' : value;
+    newData[rowIndex][attendanceKey] = value === 'null' ? null : value;
     setEditedData(newData);
   };
 
@@ -93,7 +93,7 @@ const EditableSheetViewerDialog = ({ isOpen, onClose, sheet, sheetData }: Editab
       if (storageError) throw storageError;
 
       const allMarked = editedData.every(row => 
-        row[attendanceKey] && (String(row[attendanceKey]).toLowerCase() === 'present' || String(row[attendanceKey]).toLowerCase() === 'absent')
+        row[attendanceKey] === 'Present' || row[attendanceKey] === 'Absent'
       );
 
       const { error: dbError } = await supabase
@@ -154,7 +154,7 @@ const EditableSheetViewerDialog = ({ isOpen, onClose, sheet, sheetData }: Editab
                         <TableCell key={`${rowIndex}-${header}`}>
                           {attendanceKey && header.toLowerCase() === attendanceKey.toLowerCase() ? (
                             <Select
-                              value={String(row[header] || 'null')}
+                              value={row[header] ? String(row[header]) : 'null'}
                               onValueChange={(value) => handleAttendanceChange(rowIndex, value)}
                               disabled={isReadOnly}
                             >
