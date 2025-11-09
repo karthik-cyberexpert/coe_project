@@ -4,13 +4,13 @@ import { DashboardContext, Profile } from '@/contexts/DashboardContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { showError, showLoading, dismissToast, showSuccess } from '@/utils/toast';
+import { showError, showLoading, dismissToast } from '@/utils/toast';
 import SheetViewerDialog from '@/components/SheetViewerDialog';
 import EditableSheetViewerDialog from '@/components/EditableSheetViewerDialog';
 import StaffSheetViewerDialog from '@/components/StaffSheetViewerDialog';
 import * as XLSX from 'xlsx';
 
-interface SheetWithDept {
+interface SheetWithRelations {
   id: string;
   sheet_name: string;
   file_path: string;
@@ -21,14 +21,18 @@ interface SheetWithDept {
     degree: string;
     department_name: string;
   } | null;
+  subjects: {
+    subject_code: string;
+    subject_name: string;
+  } | null;
 }
 
 const DashboardHome = () => {
   const { profile } = useContext(DashboardContext);
-  const [sheets, setSheets] = useState<SheetWithDept[]>([]);
+  const [sheets, setSheets] = useState<SheetWithRelations[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const [viewingSheet, setViewingSheet] = useState<SheetWithDept | null>(null);
+  const [viewingSheet, setViewingSheet] = useState<SheetWithRelations | null>(null);
   const [sheetContent, setSheetContent] = useState<Record<string, any>[]>([]);
   const [isViewerOpen, setIsViewerOpen] = useState(false);
 
@@ -36,7 +40,7 @@ const DashboardHome = () => {
     setLoading(true);
     const { data, error } = await supabase
       .from('sheets')
-      .select('*, departments(degree, department_name)')
+      .select('*, departments(degree, department_name), subjects(subject_code, subject_name)')
       .order('created_at', { ascending: false });
 
     if (error) {
@@ -51,7 +55,7 @@ const DashboardHome = () => {
     fetchSheets();
   }, []);
 
-  const getStatus = (sheet: SheetWithDept, userProfile: Profile) => {
+  const getStatus = (sheet: SheetWithRelations, userProfile: Profile) => {
     let status: 'Pending' | 'Finished' = 'Pending';
     let variant: 'default' | 'secondary' = 'secondary';
     let text = 'Pending';
@@ -83,7 +87,7 @@ const DashboardHome = () => {
     return <Badge variant={variant} className={variant === 'default' ? 'bg-green-500' : 'bg-yellow-500'}>{text}</Badge>;
   };
 
-  const handleRowClick = async (sheet: SheetWithDept) => {
+  const handleRowClick = async (sheet: SheetWithRelations) => {
     if (!profile) return;
 
     const toastId = showLoading(`Loading ${sheet.sheet_name}...`);
@@ -148,6 +152,8 @@ const DashboardHome = () => {
               <TableHeader>
                 <TableRow>
                   <TableHead>Sheet Name</TableHead>
+                  <TableHead>Subject Code</TableHead>
+                  <TableHead>Subject Name</TableHead>
                   <TableHead>Degree</TableHead>
                   <TableHead>Department</TableHead>
                   <TableHead>Status</TableHead>
@@ -157,13 +163,15 @@ const DashboardHome = () => {
                 {sheets.length > 0 ? sheets.map((sheet) => (
                   <TableRow key={sheet.id} onClick={() => handleRowClick(sheet)} className="cursor-pointer hover:bg-gray-50">
                     <TableCell className="font-medium">{sheet.sheet_name}</TableCell>
+                    <TableCell>{sheet.subjects?.subject_code || 'N/A'}</TableCell>
+                    <TableCell>{sheet.subjects?.subject_name || 'N/A'}</TableCell>
                     <TableCell>{sheet.departments?.degree || 'N/A'}</TableCell>
                     <TableCell>{sheet.departments?.department_name || 'N/A'}</TableCell>
                     <TableCell>{profile && getStatus(sheet, profile)}</TableCell>
                   </TableRow>
                 )) : (
                   <TableRow>
-                    <TableCell colSpan={4} className="text-center">No sheets found.</TableCell>
+                    <TableCell colSpan={6} className="text-center">No sheets found.</TableCell>
                   </TableRow>
                 )}
               </TableBody>
