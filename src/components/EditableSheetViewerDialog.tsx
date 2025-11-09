@@ -62,7 +62,7 @@ const EditableSheetViewerDialog = ({ isOpen, onClose, sheet, sheetData }: Editab
   const handleAttendanceChange = (rowIndex: number, value: string) => {
     if (!attendanceKey) return;
     const newData = [...editedData];
-    newData[rowIndex][attendanceKey] = value === 'null' ? null : value;
+    newData[rowIndex][attendanceKey] = value === 'null' ? '' : value;
     setEditedData(newData);
   };
 
@@ -154,7 +154,7 @@ const EditableSheetViewerDialog = ({ isOpen, onClose, sheet, sheetData }: Editab
                         <TableCell key={`${rowIndex}-${header}`}>
                           {attendanceKey && header.toLowerCase() === attendanceKey.toLowerCase() ? (
                             <Select
-                              value={row[header] ? String(row[header]) : 'null'}
+                              value={row[header] === 'Present' ? 'Present' : row[header] === 'Absent' ? 'Absent' : 'null'}
                               onValueChange={(value) => handleAttendanceChange(rowIndex, value)}
                               disabled={isReadOnly}
                             >
