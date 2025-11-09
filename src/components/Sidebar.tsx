@@ -8,6 +8,7 @@ interface Profile {
   is_admin: boolean | null;
   is_ceo: boolean | null;
   is_sub_admin: boolean | null;
+  is_staff: boolean | null;
 }
 
 interface SidebarProps {
@@ -28,6 +29,10 @@ const coeNavItems = [
 
 const subAdminNavItems = [
   { href: "/subadmin-sheets", icon: Sheet, label: "Sheets" },
+];
+
+const staffNavItems = [
+  { href: "/staff-sheets", icon: Sheet, label: "Sheets" },
 ];
 
 const Sidebar = ({ user, profile, onSignOut }: SidebarProps) => {
@@ -69,6 +74,22 @@ const Sidebar = ({ user, profile, onSignOut }: SidebarProps) => {
         )}
         {profile.is_sub_admin && (
           subAdminNavItems.map((item) => (
+            <NavLink
+              key={item.href}
+              to={item.href}
+              className={({ isActive }) =>
+                `flex items-center px-3 py-2 text-gray-700 rounded-md hover:bg-gray-200 ${
+                  isActive ? "bg-gray-300 font-semibold" : ""
+                }`
+              }
+            >
+              <item.icon className="w-5 h-5 mr-3" />
+              {item.label}
+            </NavLink>
+          ))
+        )}
+        {profile.is_staff && !profile.is_admin && !profile.is_ceo && !profile.is_sub_admin && (
+          staffNavItems.map((item) => (
             <NavLink
               key={item.href}
               to={item.href}
