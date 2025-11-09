@@ -42,7 +42,6 @@ export interface Sheet {
   start_date?: string | null;
   end_date?: string | null;
   year?: string | null;
-  batch?: string | null;
 }
 
 const getCurrentAcademicYear = () => {
@@ -57,21 +56,6 @@ const getCurrentAcademicYear = () => {
   }
 };
 
-const generateBatchOptions = () => {
-  const batches = [];
-  const baseYear = 2022;
-  const now = new Date();
-  const currentYear = now.getFullYear();
-  const currentMonth = now.getMonth();
-
-  const latestStartYear = currentMonth >= 5 ? currentYear : currentYear - 1;
-
-  for (let year = baseYear; year <= latestStartYear; year++) {
-    batches.push(`${year}-${year + 4}`);
-  }
-  return batches;
-};
-
 const Sheets = () => {
   const [departments, setDepartments] = useState<Department[]>([]);
   const [subjects, setSubjects] = useState<Subject[]>([]);
@@ -79,10 +63,8 @@ const Sheets = () => {
   
   const [selectedDepartment, setSelectedDepartment] = useState<string>('');
   const [selectedSubject, setSelectedSubject] = useState<string>('');
-  const [selectedBatch, setSelectedBatch] = useState<string>('');
   
   const [academicYear, setAcademicYear] = useState('');
-  const [batchOptions, setBatchOptions] = useState<string[]>([]);
 
   const [loadingDepartments, setLoadingDepartments] = useState(true);
   const [loadingSubjects, setLoadingSubjects] = useState(false);
@@ -124,7 +106,6 @@ const Sheets = () => {
 
   useEffect(() => {
     setAcademicYear(getCurrentAcademicYear());
-    setBatchOptions(generateBatchOptions());
 
     const fetchDepartments = async () => {
       setLoadingDepartments(true);
@@ -149,7 +130,6 @@ const Sheets = () => {
     const fetchSubjects = async () => {
       setLoadingSubjects(true);
       setSelectedSubject('');
-      setSelectedBatch('');
       setSheets([]);
       
       const { data, error } = await supabase
@@ -292,7 +272,6 @@ const Sheets = () => {
             department_id: selectedDepartment,
             subject_id: selectedSubject,
             year: academicYear,
-            batch: selectedBatch,
         });
         if (insertError) throw insertError;
 
@@ -443,23 +422,10 @@ const Sheets = () => {
               <label className="block text-sm font-medium text-gray-700 mb-1">Academic Year</label>
               <Input value={academicYear} disabled />
             </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Batch</label>
-              <Select onValueChange={setSelectedBatch} value={selectedBatch} disabled={!selectedSubject}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select a batch" />
-                </SelectTrigger>
-                <SelectContent>
-                  {batchOptions.map(batch => (
-                    <SelectItem key={batch} value={batch}>{batch}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
           </div>
           
           <div className="pt-2">
-            <Button onClick={() => fileInputRef.current?.click()} disabled={!selectedDepartment || !selectedSubject || !selectedBatch}>Add Sheet</Button>
+            <Button onClick={() => fileInputRef.current?.click()} disabled={!selectedDepartment || !selectedSubject}>Add Sheet</Button>
             <input type="file" ref={fileInputRef} onChange={handleFileSelect} className="hidden" accept=".xlsx" />
           </div>
         </CardContent>
@@ -480,7 +446,6 @@ const Sheets = () => {
                     <TableRow>
                       <TableHead>Sheet Name</TableHead>
                       <TableHead>Year</TableHead>
-                      <TableHead>Batch</TableHead>
                       <TableHead>Uploaded At</TableHead>
                       <TableHead className="text-right">Actions</TableHead>
                     </TableRow>
@@ -491,7 +456,6 @@ const Sheets = () => {
                         <TableRow key={sheet.id}>
                           <TableCell className="font-medium">{sheet.sheet_name}</TableCell>
                           <TableCell>{sheet.year || 'N/A'}</TableCell>
-                          <TableCell>{sheet.batch || 'N/A'}</TableCell>
                           <TableCell>{new Date(sheet.created_at).toLocaleString()}</TableCell>
                           <TableCell className="text-right space-x-2">
                             <Button variant="ghost" size="icon" onClick={() => handleDownloadSheet(sheet)}>
@@ -511,7 +475,7 @@ const Sheets = () => {
                       ))
                     ) : (
                       <TableRow>
-                        <TableCell colSpan={5} className="text-center">No sheets found for this subject.</TableCell>
+                        <TableCell colSpan={4} className="text-center">No sheets found for this subject.</TableCell>
                       </TableRow>
                     )}
                   </TableBody>
