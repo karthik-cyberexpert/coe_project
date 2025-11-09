@@ -66,7 +66,7 @@ const EditableSheetViewerDialog = ({ isOpen, onClose, sheet, sheetData }: Editab
   };
 
   const handleSaveChanges = async () => {
-    if (!sheet) {
+    if (!sheet || !attendanceKey) {
       showError("Sheet information is missing. Cannot save.");
       return;
     }
@@ -91,10 +91,13 @@ const EditableSheetViewerDialog = ({ isOpen, onClose, sheet, sheetData }: Editab
 
       if (storageError) throw storageError;
 
-      // "Touch" the database row to trigger the updated_at timestamp and realtime event
+      const allMarked = editedData.every(row => 
+        row[attendanceKey] && (String(row[attendanceKey]).toLowerCase() === 'present' || String(row[attendanceKey]).toLowerCase() === 'absent')
+      );
+
       const { error: dbError } = await supabase
         .from('sheets')
-        .update({ sheet_name: sheet.sheet_name }) // an arbitrary update
+        .update({ attendance_marked: allMarked })
         .eq('id', sheet.id);
 
       if (dbError) throw dbError;

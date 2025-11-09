@@ -103,9 +103,13 @@ const StaffSheetViewerDialog = ({ isOpen, onClose, sheet, sheetData }: StaffShee
 
       if (storageError) throw storageError;
 
+      const allMarked = updatedSheetData.every(row => 
+        row[externalMarkKey] !== null && row[externalMarkKey] !== undefined && String(row[externalMarkKey]).trim() !== ''
+      );
+
       const { error: dbError } = await supabase
         .from('sheets')
-        .update({ sheet_name: sheet.sheet_name })
+        .update({ external_marks_added: allMarked })
         .eq('id', sheet.id);
 
       if (dbError) throw dbError;

@@ -144,10 +144,9 @@ const SheetViewerDialog = ({ isOpen, onClose, sheet, sheetData, showDuplicateGen
 
       if (storageError) throw storageError;
 
-      // "Touch" the database row to trigger the updated_at timestamp and realtime event
       const { error: dbError } = await supabase
         .from('sheets')
-        .update({ sheet_name: sheet.sheet_name }) // an arbitrary update
+        .update({ duplicates_generated: true })
         .eq('id', sheet.id);
 
       if (dbError) throw dbError;
