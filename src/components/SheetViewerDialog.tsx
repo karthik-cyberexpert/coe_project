@@ -67,44 +67,53 @@ const SheetViewerDialog = ({
 
   useEffect(() => {
     if (isOpen) {
-      let data = [...sheetData];
+      const attendanceKey = sheetData.length > 0 ? Object.keys(sheetData[0]).find(k => k.toLowerCase() === 'attendance') : undefined;
+
+      const presentStudents = attendanceKey 
+        ? sheetData.filter(row => String(row[attendanceKey]).trim().toLowerCase() === 'present')
+        : [...sheetData];
+      
+      const absentOrNilStudents = attendanceKey
+        ? sheetData.filter(row => String(row[attendanceKey]).trim().toLowerCase() !== 'present')
+        : [];
+
+      let processedPresentData = [...presentStudents];
       
       if (showBundles) {
-        const duplicateNumberKey = data.length > 0 ? Object.keys(data[0]).find(k => k.toLowerCase().replace(/\s/g, '') === 'duplicatenumber') : undefined;
-        if (duplicateNumberKey) {
-          data.sort((a, b) => (Number(a[duplicateNumberKey]) || 0) - (Number(b[duplicateNumberKey]) || 0));
-          const subjectCodePrefix = sheet.subjects!.subject_code.slice(0, 6);
-          data = data.map((row, index) => ({
+        const duplicateNumberKey = processedPresentData.length > 0 ? Object.keys(processedPresentData[0]).find(k => k.toLowerCase().replace(/\s/g, '') === 'duplicatenumber') : undefined;
+        if (duplicateNumberKey && sheet.subjects?.subject_code) {
+          processedPresentData.sort((a, b) => (Number(a[duplicateNumberKey]) || 0) - (Number(b[duplicateNumberKey]) || 0));
+          const subjectCodePrefix = sheet.subjects.subject_code.slice(0, 6);
+          processedPresentData = processedPresentData.map((row, index) => ({
             ...row,
             __bundleName: `${subjectCodePrefix}-${String(Math.floor(index / 20) + 1).padStart(2, '0')}`,
             __isFirstInBundle: index % 20 === 0,
           }));
         }
       } else {
-        const rollNumberKey = data.length > 0 ? Object.keys(data[0]).find(k => k.toLowerCase().replace(/\s/g, '') === 'rollnumber') : undefined;
-        const duplicateNumberKey = data.length > 0 ? Object.keys(data[0]).find(k => k.toLowerCase().replace(/\s/g, '') === 'duplicatenumber') : undefined;
+        const rollNumberKey = processedPresentData.length > 0 ? Object.keys(processedPresentData[0]).find(k => k.toLowerCase().replace(/\s/g, '') === 'rollnumber') : undefined;
+        const duplicateNumberKey = processedPresentData.length > 0 ? Object.keys(processedPresentData[0]).find(k => k.toLowerCase().replace(/\s/g, '') === 'duplicatenumber') : undefined;
         switch (sortOption) {
           case 'roll_asc':
-            if (rollNumberKey) data.sort((a, b) => String(a[rollNumberKey]).localeCompare(String(b[rollNumberKey]), undefined, { numeric: true }));
+            if (rollNumberKey) processedPresentData.sort((a, b) => String(a[rollNumberKey]).localeCompare(String(b[rollNumberKey]), undefined, { numeric: true }));
             break;
           case 'roll_desc':
-            if (rollNumberKey) data.sort((a, b) => String(b[rollNumberKey]).localeCompare(String(a[rollNumberKey]), undefined, { numeric: true }));
+            if (rollNumberKey) processedPresentData.sort((a, b) => String(b[rollNumberKey]).localeCompare(String(a[rollNumberKey]), undefined, { numeric: true }));
             break;
           case 'dup_asc':
-            if (duplicateNumberKey) data.sort((a, b) => (Number(a[duplicateNumberKey]) || 0) - (Number(b[duplicateNumberKey]) || 0));
+            if (duplicateNumberKey) processedPresentData.sort((a, b) => (Number(a[duplicateNumberKey]) || 0) - (Number(b[duplicateNumberKey]) || 0));
             break;
           case 'dup_desc':
-            if (duplicateNumberKey) data.sort((a, b) => (Number(b[duplicateNumberKey]) || 0) - (Number(a[duplicateNumberKey]) || 0));
+            if (duplicateNumberKey) processedPresentData.sort((a, b) => (Number(b[duplicateNumberKey]) || 0) - (Number(a[duplicateNumberKey]) || 0));
             break;
           default:
             break;
         }
       }
       
-      setDisplayData(data);
+      setDisplayData([...processedPresentData, ...absentOrNilStudents]);
 
       if (sheetData.length > 0) {
-        const attendanceKey = Object.keys(sheetData[0]).find(k => k.toLowerCase() === 'attendance');
         if (attendanceKey && sheetData.some(row => row[attendanceKey] && (String(row[attendanceKey]).toLowerCase() === 'present' || String(row[attendanceKey]).toLowerCase() === 'absent'))) {
             setIsAttendanceMarked(true);
         } else {
@@ -137,7 +146,18 @@ const SheetViewerDialog = ({
     const toastId = showLoading("Generating and saving numbers...");
 
     try {
-      const dataToShuffle = [...sheetData];
+      const attendanceKey = sheetData.length > 0 ? Object.keys(sheetData[0]).find(k => k.toLowerCase() === 'attendance') : undefined;
+      const duplicateNumberKey = (sheetData.length > 0 && Object.keys(sheetData[0]).find(k => k.toLowerCase().replace(/\s/g, '') === 'duplicatenumber')) || 'duplicate number';
+
+      const presentStudents = attendanceKey 
+        ? sheetData.filter(row => String(row[attendanceKey]).trim().toLowerCase() === 'present')
+        : [...sheetData];
+      
+      const absentOrNilStudents = attendanceKey
+        ? sheetData.filter(row => String(row[attendanceKey]).trim().toLowerCase() !== 'present')
+        : [];
+
+      const dataToShuffle = [...presentStudents];
       const groups = [];
       for (let i = 0; i < dataToShuffle.length; i += 5) {
         groups.push(dataToShuffle.slice(i, i + 5));
@@ -151,11 +171,13 @@ const SheetViewerDialog = ({
       };
       const shuffledGroups = shuffleArray(groups);
       const shuffledData = shuffledGroups.map(group => shuffleArray([...group])).flat();
-      const duplicateNumberKey = (sheetData.length > 0 && Object.keys(sheetData[0]).find(k => k.toLowerCase() === 'duplicate number')) || 'duplicate number';
-      const updatedData = shuffledData.map((row, index) => ({
+      
+      const updatedPresentStudents = shuffledData.map((row, index) => ({
         ...row,
         [duplicateNumberKey]: startingNum + index,
       }));
+
+      const updatedData = [...updatedPresentStudents, ...absentOrNilStudents];
 
       const newWorksheet = XLSX.utils.json_to_sheet(updatedData);
       const newWorkbook = XLSX.utils.book_new();
@@ -179,7 +201,6 @@ const SheetViewerDialog = ({
 
       if (dbError) throw dbError;
 
-      setDisplayData(updatedData);
       dismissToast(toastId);
       showSuccess("Duplicate numbers generated and saved successfully!");
 
