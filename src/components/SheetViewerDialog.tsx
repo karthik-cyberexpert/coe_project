@@ -188,17 +188,25 @@ const SheetViewerDialog = ({ isOpen, onClose, sheet, sheetData, showDuplicateGen
 
   const headers = (() => {
     if (displayData.length === 0) return [];
-    let currentHeaders = Object.keys(displayData[0]);
-    const attendanceKey = currentHeaders.find(k => k.toLowerCase() === 'attendance');
-    const duplicateNumberKey = currentHeaders.find(k => k.toLowerCase().replace(/\s/g, '') === 'duplicatenumber');
     
-    const attendanceIsSet = attendanceKey && displayData.some(row => row[attendanceKey]);
-    const duplicateIsSet = duplicateNumberKey && displayData.some(row => row[duplicateNumberKey]);
+    let allHeaders = Object.keys(displayData[0]);
+    
+    const attendanceKey = allHeaders.find(k => k.toLowerCase() === 'attendance');
+    const duplicateNumberKey = allHeaders.find(k => k.toLowerCase().replace(/\s/g, '') === 'duplicatenumber');
+    
+    const isAttendanceMarked = attendanceKey 
+      ? displayData.some(row => row[attendanceKey] && String(row[attendanceKey]).trim() !== '') 
+      : false;
+      
+    const areDuplicatesGenerated = duplicateNumberKey 
+      ? displayData.some(row => row[duplicateNumberKey] && String(row[duplicateNumberKey]).trim() !== '') 
+      : false;
 
-    if (!attendanceIsSet || !duplicateIsSet) {
-        currentHeaders = currentHeaders.filter(h => h.toLowerCase() !== 'external mark');
+    if (!isAttendanceMarked || !areDuplicatesGenerated) {
+      allHeaders = allHeaders.filter(h => h.toLowerCase() !== 'external mark');
     }
-    return currentHeaders;
+    
+    return allHeaders;
   })();
 
   return (
