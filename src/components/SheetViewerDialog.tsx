@@ -62,8 +62,15 @@ const SheetViewerDialog = ({
   const [isSaving, setIsSaving] = useState(false);
   const [sortOption, setSortOption] = useState('default');
   const [isAttendanceMarked, setIsAttendanceMarked] = useState(false);
+  const [currentSheet, setCurrentSheet] = useState<Sheet | null>(null);
 
-  const showBundles = showBundleNumber && sheet?.duplicates_generated && sheet.subjects?.subject_code;
+  const showBundles = showBundleNumber && currentSheet?.duplicates_generated && currentSheet?.subjects?.subject_code;
+
+  useEffect(() => {
+    if (isOpen && sheet) {
+      setCurrentSheet(JSON.parse(JSON.stringify(sheet)));
+    }
+  }, [isOpen, sheet]);
 
   useEffect(() => {
     if (isOpen) {
@@ -81,9 +88,9 @@ const SheetViewerDialog = ({
       
       if (showBundles) {
         const duplicateNumberKey = processedPresentData.length > 0 ? Object.keys(processedPresentData[0]).find(k => k.toLowerCase().replace(/\s/g, '') === 'duplicatenumber') : undefined;
-        if (duplicateNumberKey && sheet.subjects?.subject_code) {
+        if (duplicateNumberKey && currentSheet?.subjects?.subject_code) {
           processedPresentData.sort((a, b) => (Number(a[duplicateNumberKey]) || 0) - (Number(b[duplicateNumberKey]) || 0));
-          const subjectCodePrefix = sheet.subjects.subject_code.slice(0, 6);
+          const subjectCodePrefix = currentSheet.subjects.subject_code.slice(0, 6);
           processedPresentData = processedPresentData.map((row, index) => ({
             ...row,
             __bundleName: `${subjectCodePrefix}-${String(Math.floor(index / 20) + 1).padStart(2, '0')}`,
@@ -121,7 +128,7 @@ const SheetViewerDialog = ({
         }
       }
     }
-  }, [isOpen, sheetData, sheet, sortOption, showBundleNumber, showBundles]);
+  }, [isOpen, sheetData, currentSheet, sortOption, showBundleNumber, showBundles]);
 
   useEffect(() => {
     if (isOpen) {
@@ -132,7 +139,7 @@ const SheetViewerDialog = ({
   }, [isOpen]);
 
   const handleGenerateAndSave = async () => {
-    if (!sheet) {
+    if (!currentSheet) {
       showError("Sheet information is missing. Cannot save.");
       return;
     }
@@ -187,7 +194,7 @@ const SheetViewerDialog = ({
       
       const { error: storageError } = await supabase.storage
         .from('sheets')
-        .update(sheet.file_path, blob, {
+        .update(currentSheet.file_path, blob, {
           cacheControl: '0',
           upsert: true,
         });
@@ -197,14 +204,18 @@ const SheetViewerDialog = ({
       const { error: dbError } = await supabase
         .from('sheets')
         .update({ duplicates_generated: true })
-        .eq('id', sheet.id);
+        .eq('id', currentSheet.id);
 
       if (dbError) throw dbError;
+
+      setDisplayData(updatedData);
+      setCurrentSheet(prev => prev ? { ...prev, duplicates_generated: true } : null);
 
       dismissToast(toastId);
       showSuccess("Duplicate numbers generated and saved successfully!");
 
-    } catch (error: any) {
+    } catch (error: any)
+{
       dismissToast(toastId);
       showError(error.message || "Failed to save the sheet.");
     } finally {
@@ -217,7 +228,7 @@ const SheetViewerDialog = ({
     setSortOption('default');
   };
 
-  if (!sheet || !sheetData) {
+  if (!currentSheet || !sheetData) {
     return null;
   }
   
@@ -226,7 +237,7 @@ const SheetViewerDialog = ({
        <Dialog open={isOpen} onOpenChange={onClose}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>{sheet.sheet_name}</DialogTitle>
+            <DialogTitle>{currentSheet.sheet_name}</DialogTitle>
           </DialogHeader>
           <p className="py-8 text-center text-muted-foreground">This sheet appears to be empty.</p>
         </DialogContent>
@@ -251,7 +262,7 @@ const SheetViewerDialog = ({
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="sm:max-w-[80vw] max-h-[90vh] flex flex-col">
         <DialogHeader>
-          <DialogTitle>{sheet.sheet_name}</DialogTitle>
+          <DialogTitle>{currentSheet.sheet_name}</DialogTitle>
         </DialogHeader>
         <div className="flex-grow overflow-hidden min-h-0">
           <ScrollArea className="h-[50vh] w-full rounded-md border">
@@ -310,14 +321,14 @@ const SheetViewerDialog = ({
                 value={startNumber}
                 onChange={(e) => setStartNumber(e.target.value)}
                 className="w-40"
-                disabled={isSaving || sheet.duplicates_generated}
+                disabled={isSaving || currentSheet.duplicates_generated}
               />
               <TooltipProvider>
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <div className="inline-block">
-                      <Button onClick={handleGenerateAndSave} disabled={isSaving || !isAttendanceMarked || sheet.duplicates_generated}>
-                        {isSaving ? 'Saving...' : sheet.duplicates_generated ? 'Generated' : 'Generate & Save'}
+                      <Button onClick={handleGenerateAndSave} disabled={isSaving || !isAttendanceMarked || currentSheet.duplicates_generated}>
+                        {isSaving ? 'Saving...' : currentSheet.duplicates_generated ? 'Generated' : 'Generate & Save'}
                       </Button>
                     </div>
                   </TooltipTrigger>
@@ -326,7 +337,7 @@ const SheetViewerDialog = ({
                       <p>Attendance must be marked before generating numbers.</p>
                     </TooltipContent>
                   )}
-                  {sheet.duplicates_generated && (
+                  {currentSheet.duplicates_generated && (
                      <TooltipContent>
                       <p>Duplicate numbers have already been generated.</p>
                     </TooltipContent>
