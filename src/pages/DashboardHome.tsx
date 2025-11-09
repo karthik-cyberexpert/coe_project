@@ -253,6 +253,7 @@ const DashboardHome = () => {
             sheet={viewingSheet}
             sheetData={sheetContent}
             showDuplicateGenerator={profile.is_ceo}
+            showBundleNumber={profile.is_admin || profile.is_ceo}
         />
       ) : null}
       {profile?.is_sub_admin ? (

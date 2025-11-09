@@ -35,6 +35,9 @@ interface Sheet {
   file_path: string;
   created_at: string;
   duplicates_generated?: boolean;
+  subjects?: {
+    subject_code: string;
+  } | null;
 }
 
 interface SheetViewerDialogProps {
@@ -43,37 +46,61 @@ interface SheetViewerDialogProps {
   sheet: Sheet | null;
   sheetData: Record<string, any>[];
   showDuplicateGenerator?: boolean;
+  showBundleNumber?: boolean;
 }
 
-const SheetViewerDialog = ({ isOpen, onClose, sheet, sheetData, showDuplicateGenerator = false }: SheetViewerDialogProps) => {
+const SheetViewerDialog = ({ 
+  isOpen, 
+  onClose, 
+  sheet, 
+  sheetData, 
+  showDuplicateGenerator = false,
+  showBundleNumber = false,
+}: SheetViewerDialogProps) => {
   const [displayData, setDisplayData] = useState<Record<string, any>[]>([]);
   const [startNumber, setStartNumber] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const [sortOption, setSortOption] = useState('default');
   const [isAttendanceMarked, setIsAttendanceMarked] = useState(false);
 
+  const showBundles = showBundleNumber && sheet?.duplicates_generated && sheet.subjects?.subject_code;
+
   useEffect(() => {
     if (isOpen) {
       let data = [...sheetData];
-      const rollNumberKey = data.length > 0 ? Object.keys(data[0]).find(k => k.toLowerCase().replace(/\s/g, '') === 'rollnumber') : undefined;
-      const duplicateNumberKey = data.length > 0 ? Object.keys(data[0]).find(k => k.toLowerCase().replace(/\s/g, '') === 'duplicatenumber') : undefined;
-
-      switch (sortOption) {
-        case 'roll_asc':
-          if (rollNumberKey) data.sort((a, b) => String(a[rollNumberKey]).localeCompare(String(b[rollNumberKey]), undefined, { numeric: true }));
-          break;
-        case 'roll_desc':
-          if (rollNumberKey) data.sort((a, b) => String(b[rollNumberKey]).localeCompare(String(a[rollNumberKey]), undefined, { numeric: true }));
-          break;
-        case 'dup_asc':
-          if (duplicateNumberKey) data.sort((a, b) => (Number(a[duplicateNumberKey]) || 0) - (Number(b[duplicateNumberKey]) || 0));
-          break;
-        case 'dup_desc':
-          if (duplicateNumberKey) data.sort((a, b) => (Number(b[duplicateNumberKey]) || 0) - (Number(a[duplicateNumberKey]) || 0));
-          break;
-        default:
-          break;
+      
+      if (showBundles) {
+        const duplicateNumberKey = data.length > 0 ? Object.keys(data[0]).find(k => k.toLowerCase().replace(/\s/g, '') === 'duplicatenumber') : undefined;
+        if (duplicateNumberKey) {
+          data.sort((a, b) => (Number(a[duplicateNumberKey]) || 0) - (Number(b[duplicateNumberKey]) || 0));
+          const subjectCodePrefix = sheet.subjects!.subject_code.slice(0, 6);
+          data = data.map((row, index) => ({
+            ...row,
+            __bundleName: `${subjectCodePrefix}-${String(Math.floor(index / 20) + 1).padStart(2, '0')}`,
+            __isFirstInBundle: index % 20 === 0,
+          }));
+        }
+      } else {
+        const rollNumberKey = data.length > 0 ? Object.keys(data[0]).find(k => k.toLowerCase().replace(/\s/g, '') === 'rollnumber') : undefined;
+        const duplicateNumberKey = data.length > 0 ? Object.keys(data[0]).find(k => k.toLowerCase().replace(/\s/g, '') === 'duplicatenumber') : undefined;
+        switch (sortOption) {
+          case 'roll_asc':
+            if (rollNumberKey) data.sort((a, b) => String(a[rollNumberKey]).localeCompare(String(b[rollNumberKey]), undefined, { numeric: true }));
+            break;
+          case 'roll_desc':
+            if (rollNumberKey) data.sort((a, b) => String(b[rollNumberKey]).localeCompare(String(a[rollNumberKey]), undefined, { numeric: true }));
+            break;
+          case 'dup_asc':
+            if (duplicateNumberKey) data.sort((a, b) => (Number(a[duplicateNumberKey]) || 0) - (Number(b[duplicateNumberKey]) || 0));
+            break;
+          case 'dup_desc':
+            if (duplicateNumberKey) data.sort((a, b) => (Number(b[duplicateNumberKey]) || 0) - (Number(a[duplicateNumberKey]) || 0));
+            break;
+          default:
+            break;
+        }
       }
+      
       setDisplayData(data);
 
       if (sheetData.length > 0) {
@@ -85,7 +112,7 @@ const SheetViewerDialog = ({ isOpen, onClose, sheet, sheetData, showDuplicateGen
         }
       }
     }
-  }, [isOpen, sheetData, sortOption]);
+  }, [isOpen, sheetData, sheet, sortOption, showBundleNumber, showBundles]);
 
   useEffect(() => {
     if (isOpen) {
@@ -188,24 +215,14 @@ const SheetViewerDialog = ({ isOpen, onClose, sheet, sheetData, showDuplicateGen
 
   const headers = (() => {
     if (displayData.length === 0) return [];
-    
-    let allHeaders = Object.keys(displayData[0]);
-    
+    let allHeaders = Object.keys(displayData[0]).filter(h => !h.startsWith('__'));
     const attendanceKey = allHeaders.find(k => k.toLowerCase() === 'attendance');
     const duplicateNumberKey = allHeaders.find(k => k.toLowerCase().replace(/\s/g, '') === 'duplicatenumber');
-    
-    const isAttendanceMarked = attendanceKey 
-      ? displayData.some(row => row[attendanceKey] && String(row[attendanceKey]).trim() !== '') 
-      : false;
-      
-    const areDuplicatesGenerated = duplicateNumberKey 
-      ? displayData.some(row => row[duplicateNumberKey] && String(row[duplicateNumberKey]).trim() !== '') 
-      : false;
-
+    const isAttendanceMarked = attendanceKey ? displayData.some(row => row[attendanceKey] && String(row[attendanceKey]).trim() !== '') : false;
+    const areDuplicatesGenerated = duplicateNumberKey ? displayData.some(row => row[duplicateNumberKey] && String(row[duplicateNumberKey]).trim() !== '') : false;
     if (!isAttendanceMarked || !areDuplicatesGenerated) {
       allHeaders = allHeaders.filter(h => h.toLowerCase() !== 'external mark');
     }
-    
     return allHeaders;
   })();
 
@@ -221,6 +238,7 @@ const SheetViewerDialog = ({ isOpen, onClose, sheet, sheetData, showDuplicateGen
               <Table>
                 <TableHeader>
                   <TableRow>
+                    {showBundles && <TableHead>Bundle Number</TableHead>}
                     {headers.map((header) => (
                       <TableHead key={header}>{header}</TableHead>
                     ))}
@@ -229,6 +247,14 @@ const SheetViewerDialog = ({ isOpen, onClose, sheet, sheetData, showDuplicateGen
                 <TableBody>
                   {displayData.map((row, rowIndex) => (
                     <TableRow key={rowIndex}>
+                      {showBundles && row.__isFirstInBundle && (
+                        <TableCell 
+                          rowSpan={Math.min(20, displayData.length - rowIndex)}
+                          className="align-middle text-center font-semibold border-r"
+                        >
+                          {row.__bundleName}
+                        </TableCell>
+                      )}
                       {headers.map((header) => (
                         <TableCell key={`${rowIndex}-${header}`}>{String(row[header])}</TableCell>
                       ))}
@@ -241,7 +267,7 @@ const SheetViewerDialog = ({ isOpen, onClose, sheet, sheetData, showDuplicateGen
         </div>
         <DialogFooter className="pt-4 border-t flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
           <div className="flex items-center gap-2">
-            <Select value={sortOption} onValueChange={setSortOption}>
+            <Select value={sortOption} onValueChange={setSortOption} disabled={showBundles}>
               <SelectTrigger className="w-[240px]">
                 <SelectValue placeholder="Sort by..." />
               </SelectTrigger>

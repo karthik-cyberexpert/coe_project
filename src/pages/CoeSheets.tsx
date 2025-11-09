@@ -28,6 +28,9 @@ interface Sheet {
   start_date?: string | null;
   end_date?: string | null;
   duplicates_generated: boolean;
+  subjects: {
+    subject_code: string;
+  } | null;
 }
 
 const CoeSheets = () => {
@@ -54,14 +57,14 @@ const CoeSheets = () => {
     setLoadingSheets(true);
     const { data, error } = await supabase
       .from('sheets')
-      .select('*, duplicates_generated')
+      .select('*, duplicates_generated, subjects(subject_code)')
       .eq('subject_id', selectedSubject)
       .order('created_at', { ascending: false });
     
     if (error) {
       showError('Failed to fetch sheets.');
     } else {
-      setSheets(data);
+      setSheets(data as Sheet[]);
     }
     setLoadingSheets(false);
   }, [selectedSubject]);
@@ -307,6 +310,7 @@ const CoeSheets = () => {
         sheet={currentSheet}
         sheetData={currentSheetData}
         showDuplicateGenerator={true}
+        showBundleNumber={true}
       />
     </div>
   );
