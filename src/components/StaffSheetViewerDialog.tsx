@@ -44,8 +44,15 @@ const StaffSheetViewerDialog = ({ isOpen, onClose, sheet, sheetData }: StaffShee
 
   useEffect(() => {
     if (isOpen && sheetData.length > 0) {
-      setEditedData(JSON.parse(JSON.stringify(sheetData))); // Deep copy
       const firstRowKeys = Object.keys(sheetData[0]);
+      const attendanceKey = firstRowKeys.find(k => k.toLowerCase() === 'attendance');
+      
+      const presentStudents = attendanceKey
+        ? sheetData.filter(row => String(row[attendanceKey]).trim().toLowerCase() === 'present')
+        : sheetData;
+
+      setEditedData(JSON.parse(JSON.stringify(presentStudents)));
+      
       const dupKey = firstRowKeys.find(k => k.toLowerCase().replace(/\s/g, '') === 'duplicatenumber') || null;
       const extKey = firstRowKeys.find(k => k.toLowerCase().replace(/\s/g, '') === 'externalmark') || null;
       setDuplicateNumberKey(dupKey);
