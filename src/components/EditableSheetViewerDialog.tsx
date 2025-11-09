@@ -32,6 +32,7 @@ interface Sheet {
   sheet_name: string;
   file_path: string;
   created_at: string;
+  attendance_marked?: boolean;
 }
 
 interface EditableSheetViewerDialogProps {
@@ -116,6 +117,8 @@ const EditableSheetViewerDialog = ({ isOpen, onClose, sheet, sheetData }: Editab
 
   if (!sheet || !sheetData) return null;
   
+  const isReadOnly = sheet.attendance_marked;
+
   if (sheetData.length === 0) {
     return (
        <Dialog open={isOpen} onOpenChange={(open) => !open && onClose(false)}>
@@ -153,6 +156,7 @@ const EditableSheetViewerDialog = ({ isOpen, onClose, sheet, sheetData }: Editab
                             <Select
                               value={String(row[header] || 'null')}
                               onValueChange={(value) => handleAttendanceChange(rowIndex, value)}
+                              disabled={isReadOnly}
                             >
                               <SelectTrigger className="w-[120px]">
                                 <SelectValue placeholder="Select..." />
@@ -176,8 +180,8 @@ const EditableSheetViewerDialog = ({ isOpen, onClose, sheet, sheetData }: Editab
           </ScrollArea>
         </div>
         <DialogFooter>
-          <Button onClick={handleSaveChanges} disabled={isSaving}>
-            {isSaving ? 'Saving...' : 'Save Changes'}
+          <Button onClick={handleSaveChanges} disabled={isSaving || isReadOnly}>
+            {isSaving ? 'Saving...' : isReadOnly ? 'Saved' : 'Save Changes'}
           </Button>
         </DialogFooter>
       </DialogContent>

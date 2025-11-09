@@ -26,6 +26,7 @@ interface Sheet {
   sheet_name: string;
   file_path: string;
   created_at: string;
+  external_marks_added?: boolean;
 }
 
 interface StaffSheetViewerDialogProps {
@@ -128,6 +129,8 @@ const StaffSheetViewerDialog = ({ isOpen, onClose, sheet, sheetData }: StaffShee
 
   if (!sheet || !sheetData) return null;
   
+  const isReadOnly = sheet.external_marks_added;
+
   if (sheetData.length === 0 || !duplicateNumberKey || !externalMarkKey) {
     return (
        <Dialog open={isOpen} onOpenChange={(open) => !open && onClose(false)}>
@@ -166,6 +169,7 @@ const StaffSheetViewerDialog = ({ isOpen, onClose, sheet, sheetData }: StaffShee
                         value={row[externalMarkKey] || ''}
                         onChange={(e) => handleMarkChange(rowIndex, e.target.value)}
                         className="w-24"
+                        disabled={isReadOnly}
                       />
                     </TableCell>
                   </TableRow>
@@ -175,8 +179,8 @@ const StaffSheetViewerDialog = ({ isOpen, onClose, sheet, sheetData }: StaffShee
           </ScrollArea>
         </div>
         <DialogFooter>
-          <Button onClick={handleSaveChanges} disabled={isSaving}>
-            {isSaving ? 'Saving...' : 'Save Changes'}
+          <Button onClick={handleSaveChanges} disabled={isSaving || isReadOnly}>
+            {isSaving ? 'Saving...' : isReadOnly ? 'Saved' : 'Save Changes'}
           </Button>
         </DialogFooter>
       </DialogContent>

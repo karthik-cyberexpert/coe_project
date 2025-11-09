@@ -27,6 +27,7 @@ interface Sheet {
   created_at: string;
   start_date?: string | null;
   end_date?: string | null;
+  duplicates_generated: boolean;
 }
 
 const CoeSheets = () => {
@@ -53,7 +54,7 @@ const CoeSheets = () => {
     setLoadingSheets(true);
     const { data, error } = await supabase
       .from('sheets')
-      .select('*')
+      .select('*, duplicates_generated')
       .eq('subject_id', selectedSubject)
       .order('created_at', { ascending: false });
     

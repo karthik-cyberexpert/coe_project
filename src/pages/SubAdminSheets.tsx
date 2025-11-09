@@ -8,6 +8,7 @@ import { showError, showSuccess, showLoading, dismissToast } from '@/utils/toast
 import { Eye, Download } from 'lucide-react';
 import EditableSheetViewerDialog from '@/components/EditableSheetViewerDialog';
 import * as XLSX from 'xlsx';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 interface Department {
   id: string;
@@ -27,6 +28,7 @@ interface Sheet {
   created_at: string;
   start_date?: string | null;
   end_date?: string | null;
+  attendance_marked: boolean;
 }
 
 const SubAdminSheets = () => {
@@ -50,7 +52,7 @@ const SubAdminSheets = () => {
     setLoadingSheets(true);
     const { data, error } = await supabase
       .from('sheets')
-      .select('*')
+      .select('*, attendance_marked')
       .eq('subject_id', selectedSubject)
       .order('created_at', { ascending: false });
     
@@ -270,9 +272,22 @@ const SubAdminSheets = () => {
                            <Button variant="ghost" size="icon" onClick={() => handleDownloadSheet(sheet)}>
                             <Download className="h-4 w-4" />
                           </Button>
-                           <Button variant="ghost" size="icon" onClick={() => handleViewSheet(sheet)}>
-                            <Eye className="h-4 w-4" />
-                          </Button>
+                          <TooltipProvider>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <span tabIndex={0}>
+                                  <Button variant="ghost" size="icon" onClick={() => handleViewSheet(sheet)} disabled={sheet.attendance_marked}>
+                                    <Eye className="h-4 w-4" />
+                                  </Button>
+                                </span>
+                              </TooltipTrigger>
+                              {sheet.attendance_marked && (
+                                <TooltipContent>
+                                  <p>Attendance already marked and cannot be edited.</p>
+                                </TooltipContent>
+                              )}
+                            </Tooltip>
+                          </TooltipProvider>
                         </TableCell>
                       </TableRow>
                     )) : (

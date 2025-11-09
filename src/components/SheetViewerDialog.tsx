@@ -34,6 +34,7 @@ interface Sheet {
   sheet_name: string;
   file_path: string;
   created_at: string;
+  duplicates_generated?: boolean;
 }
 
 interface SheetViewerDialogProps {
@@ -262,20 +263,25 @@ const SheetViewerDialog = ({ isOpen, onClose, sheet, sheetData, showDuplicateGen
                 value={startNumber}
                 onChange={(e) => setStartNumber(e.target.value)}
                 className="w-40"
-                disabled={isSaving}
+                disabled={isSaving || sheet.duplicates_generated}
               />
               <TooltipProvider>
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <div className="inline-block">
-                      <Button onClick={handleGenerateAndSave} disabled={isSaving || !isAttendanceMarked}>
-                        {isSaving ? 'Saving...' : 'Generate & Save'}
+                      <Button onClick={handleGenerateAndSave} disabled={isSaving || !isAttendanceMarked || sheet.duplicates_generated}>
+                        {isSaving ? 'Saving...' : sheet.duplicates_generated ? 'Generated' : 'Generate & Save'}
                       </Button>
                     </div>
                   </TooltipTrigger>
                   {!isAttendanceMarked && (
                     <TooltipContent>
                       <p>Attendance must be marked before generating numbers.</p>
+                    </TooltipContent>
+                  )}
+                  {sheet.duplicates_generated && (
+                     <TooltipContent>
+                      <p>Duplicate numbers have already been generated.</p>
                     </TooltipContent>
                   )}
                 </Tooltip>
