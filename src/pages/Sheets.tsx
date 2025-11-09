@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -40,7 +41,36 @@ export interface Sheet {
   created_at: string;
   start_date?: string | null;
   end_date?: string | null;
+  year?: string | null;
+  batch?: string | null;
 }
+
+const getCurrentAcademicYear = () => {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = now.getMonth(); // 0-11
+
+  if (month >= 5) { // June to December
+    return `${year}-${year + 1} Quarter 1`;
+  } else { // January to May
+    return `${year - 1}-${year} Quarter 2`;
+  }
+};
+
+const generateBatchOptions = () => {
+  const batches = [];
+  const baseYear = 2022;
+  const now = new Date();
+  const currentYear = now.getFullYear();
+  const currentMonth = now.getMonth();
+
+  const latestStartYear = currentMonth >= 5 ? currentYear : currentYear - 1;
+
+  for (let year = baseYear; year <= latestStartYear; year++) {
+    batches.push(`${year}-${year + 4}`);
+  }
+  return batches;
+};
 
 const Sheets = () => {
   const [departments, setDepartments] = useState<Department[]>([]);
@@ -49,7 +79,11 @@ const Sheets = () => {
   
   const [selectedDepartment, setSelectedDepartment] = useState<string>('');
   const [selectedSubject, setSelectedSubject] = useState<string>('');
+  const [selectedBatch, setSelectedBatch] = useState<string>('');
   
+  const [academicYear, setAcademicYear] = useState('');
+  const [batchOptions, setBatchOptions] = useState<string[]>([]);
+
   const [loadingDepartments, setLoadingDepartments] = useState(true);
   const [loadingSubjects, setLoadingSubjects] = useState(false);
   const [loadingSheets, setLoadingSheets] = useState(false);
@@ -89,6 +123,9 @@ const Sheets = () => {
   }, [selectedSubject]);
 
   useEffect(() => {
+    setAcademicYear(getCurrentAcademicYear());
+    setBatchOptions(generateBatchOptions());
+
     const fetchDepartments = async () => {
       setLoadingDepartments(true);
       const { data, error } = await supabase.from('departments').select('id, department_name');
@@ -112,6 +149,7 @@ const Sheets = () => {
     const fetchSubjects = async () => {
       setLoadingSubjects(true);
       setSelectedSubject('');
+      setSelectedBatch('');
       setSheets([]);
       
       const { data, error } = await supabase
@@ -253,6 +291,8 @@ const Sheets = () => {
             file_path: filePath,
             department_id: selectedDepartment,
             subject_id: selectedSubject,
+            year: academicYear,
+            batch: selectedBatch,
         });
         if (insertError) throw insertError;
 
@@ -398,13 +438,30 @@ const Sheets = () => {
               </Select>
             </div>
           </div>
-          
-          {selectedDepartment && selectedSubject && (
-            <div className="pt-2">
-              <Button onClick={() => fileInputRef.current?.click()}>Add Sheet</Button>
-              <input type="file" ref={fileInputRef} onChange={handleFileSelect} className="hidden" accept=".xlsx" />
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Academic Year</label>
+              <Input value={academicYear} disabled />
             </div>
-          )}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Batch</label>
+              <Select onValueChange={setSelectedBatch} value={selectedBatch} disabled={!selectedSubject}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select a batch" />
+                </SelectTrigger>
+                <SelectContent>
+                  {batchOptions.map(batch => (
+                    <SelectItem key={batch} value={batch}>{batch}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          
+          <div className="pt-2">
+            <Button onClick={() => fileInputRef.current?.click()} disabled={!selectedDepartment || !selectedSubject || !selectedBatch}>Add Sheet</Button>
+            <input type="file" ref={fileInputRef} onChange={handleFileSelect} className="hidden" accept=".xlsx" />
+          </div>
         </CardContent>
       </Card>
 
@@ -422,6 +479,8 @@ const Sheets = () => {
                   <TableHeader>
                     <TableRow>
                       <TableHead>Sheet Name</TableHead>
+                      <TableHead>Year</TableHead>
+                      <TableHead>Batch</TableHead>
                       <TableHead>Uploaded At</TableHead>
                       <TableHead className="text-right">Actions</TableHead>
                     </TableRow>
@@ -431,6 +490,8 @@ const Sheets = () => {
                       sheets.map(sheet => (
                         <TableRow key={sheet.id}>
                           <TableCell className="font-medium">{sheet.sheet_name}</TableCell>
+                          <TableCell>{sheet.year || 'N/A'}</TableCell>
+                          <TableCell>{sheet.batch || 'N/A'}</TableCell>
                           <TableCell>{new Date(sheet.created_at).toLocaleString()}</TableCell>
                           <TableCell className="text-right space-x-2">
                             <Button variant="ghost" size="icon" onClick={() => handleDownloadSheet(sheet)}>
@@ -450,7 +511,7 @@ const Sheets = () => {
                       ))
                     ) : (
                       <TableRow>
-                        <TableCell colSpan={3} className="text-center">No sheets found for this subject.</TableCell>
+                        <TableCell colSpan={5} className="text-center">No sheets found for this subject.</TableCell>
                       </TableRow>
                     )}
                   </TableBody>

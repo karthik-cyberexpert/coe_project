@@ -17,6 +17,8 @@ interface SheetWithRelations {
   attendance_marked: boolean;
   duplicates_generated: boolean;
   external_marks_added: boolean;
+  year?: string | null;
+  batch?: string | null;
   departments: {
     degree: string;
     department_name: string;
@@ -156,6 +158,8 @@ const DashboardHome = () => {
                   <TableHead>Subject Name</TableHead>
                   <TableHead>Degree</TableHead>
                   <TableHead>Department</TableHead>
+                  <TableHead>Year</TableHead>
+                  <TableHead>Batch</TableHead>
                   <TableHead>Status</TableHead>
                 </TableRow>
               </TableHeader>
@@ -167,11 +171,13 @@ const DashboardHome = () => {
                     <TableCell>{sheet.subjects?.subject_name || 'N/A'}</TableCell>
                     <TableCell>{sheet.departments?.degree || 'N/A'}</TableCell>
                     <TableCell>{sheet.departments?.department_name || 'N/A'}</TableCell>
+                    <TableCell>{sheet.year || 'N/A'}</TableCell>
+                    <TableCell>{sheet.batch || 'N/A'}</TableCell>
                     <TableCell>{profile && getStatus(sheet, profile)}</TableCell>
                   </TableRow>
                 )) : (
                   <TableRow>
-                    <TableCell colSpan={6} className="text-center">No sheets found.</TableCell>
+                    <TableCell colSpan={8} className="text-center">No sheets found.</TableCell>
                   </TableRow>
                 )}
               </TableBody>
