@@ -59,6 +59,7 @@ const CoeSheets = () => {
       .from('sheets')
       .select('*, duplicates_generated, subjects(subject_code)')
       .eq('subject_id', selectedSubject)
+      .eq('attendance_marked', true)
       .order('created_at', { ascending: false });
     
     if (error) {

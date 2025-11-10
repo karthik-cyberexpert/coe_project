@@ -45,42 +45,51 @@ const DashboardHome = () => {
   const [sheetContent, setSheetContent] = useState<Record<string, any>[]>([]);
   const [isViewerOpen, setIsViewerOpen] = useState(false);
 
-  const fetchSheets = async () => {
-    setLoading(true);
-    const { data, error } = await supabase
-      .from('sheets')
-      .select('*, departments(degree, department_name), subjects(subject_code, subject_name)')
-      .order('created_at', { ascending: false });
-
-    if (error) {
-      showError('Failed to fetch sheet statuses.');
-    } else {
-      const sheetData = data as any[];
-      setSheets(sheetData);
-      setFilteredSheets(sheetData);
-
-      if (sheetData.length > 0) {
-        const uniqueYears = new Set<string>();
-        const uniqueQuarters = new Set<string>();
-        sheetData.forEach(sheet => {
-          if (sheet.year) {
-            const parts = sheet.year.split(' ');
-            if (parts.length >= 2) {
-              uniqueYears.add(parts[0]);
-              uniqueQuarters.add(parts.slice(1).join(' '));
-            }
-          }
-        });
-        setYearOptions(['all', ...Array.from(uniqueYears)]);
-        setQuarterOptions(['all', ...Array.from(uniqueQuarters)]);
-      }
-    }
-    setLoading(false);
-  };
-
   useEffect(() => {
+    const fetchSheets = async () => {
+      if (!profile) return;
+
+      setLoading(true);
+      let query = supabase
+        .from('sheets')
+        .select('*, departments(degree, department_name), subjects(subject_code, subject_name)');
+
+      if (profile.is_ceo && !profile.is_admin && !profile.is_sub_admin) {
+        query = query.eq('attendance_marked', true);
+      } else if (profile.is_staff && !profile.is_admin && !profile.is_sub_admin && !profile.is_ceo) {
+        query = query.eq('duplicates_generated', true);
+      }
+
+      const { data, error } = await query.order('created_at', { ascending: false });
+
+      if (error) {
+        showError('Failed to fetch sheet statuses.');
+      } else {
+        const sheetData = data as any[];
+        setSheets(sheetData);
+        setFilteredSheets(sheetData);
+
+        if (sheetData.length > 0) {
+          const uniqueYears = new Set<string>();
+          const uniqueQuarters = new Set<string>();
+          sheetData.forEach(sheet => {
+            if (sheet.year) {
+              const parts = sheet.year.split(' ');
+              if (parts.length >= 2) {
+                uniqueYears.add(parts[0]);
+                uniqueQuarters.add(parts.slice(1).join(' '));
+              }
+            }
+          });
+          setYearOptions(['all', ...Array.from(uniqueYears)]);
+          setQuarterOptions(['all', ...Array.from(uniqueQuarters)]);
+        }
+      }
+      setLoading(false);
+    };
+
     fetchSheets();
-  }, []);
+  }, [profile]);
 
   useEffect(() => {
     let tempSheets = [...sheets];
@@ -167,7 +176,8 @@ const DashboardHome = () => {
     setViewingSheet(null);
     setSheetContent([]);
     if (didSave) {
-      fetchSheets();
+      // Re-fetch sheets by clearing and letting useEffect run again
+      setSheets([]);
     }
   };
 

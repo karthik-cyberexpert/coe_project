@@ -67,6 +67,7 @@ const StaffSheets = () => {
       .eq('subject_id', selectedSubject)
       .eq('year', academicTerm)
       .eq('batch', selectedSemester)
+      .eq('duplicates_generated', true)
       .order('created_at', { ascending: false });
 
     if (error) {
