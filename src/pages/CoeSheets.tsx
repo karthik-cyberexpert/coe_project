@@ -7,6 +7,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { showError, showSuccess, showLoading, dismissToast } from '@/utils/toast';
 import { Eye, Download } from 'lucide-react';
 import SheetViewerDialog from '@/components/SheetViewerDialog';
+import { ColumnSelectionDialog } from '@/components/ColumnSelectionDialog';
 import * as XLSX from 'xlsx';
 
 interface Department {
@@ -48,6 +49,10 @@ const CoeSheets = () => {
   const [isViewerOpen, setIsViewerOpen] = useState(false);
   const [currentSheet, setCurrentSheet] = useState<Sheet | null>(null);
   const [currentSheetData, setCurrentSheetData] = useState<Record<string, any>[]>([]);
+
+  const [isColumnSelectorOpen, setIsColumnSelectorOpen] = useState(false);
+  const [sheetToDownload, setSheetToDownload] = useState<Sheet | null>(null);
+  const [sheetDataForDownload, setSheetDataForDownload] = useState<Record<string, any>[]>([]);
 
   const fetchSheets = useCallback(async () => {
     if (!selectedSubject) {
@@ -152,74 +157,47 @@ const CoeSheets = () => {
     return true;
   };
 
-  const handleViewSheet = async (sheet: Sheet) => {
-    if (!checkDateAvailability(sheet)) return;
-
+  const loadSheetData = async (sheet: Sheet): Promise<Record<string, any>[] | null> => {
     const toastId = showLoading(`Loading ${sheet.sheet_name}...`);
     try {
-      const { data, error } = await supabase.storage
-        .from('sheets')
-        .download(sheet.file_path);
+        const { data, error } = await supabase.storage
+            .from('sheets')
+            .download(sheet.file_path);
 
-      if (error) throw error;
+        if (error) throw error;
 
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        try {
-          const arrayBuffer = e.target?.result;
-          const workbook = XLSX.read(arrayBuffer, { type: 'array' });
-          const sheetName = workbook.SheetNames[0];
-          if (!sheetName) throw new Error("No sheet found in the file.");
-          const worksheet = workbook.Sheets[sheetName];
-          const json = XLSX.utils.sheet_to_json(worksheet);
-          
-          setCurrentSheetData(json);
-          setCurrentSheet(sheet);
-          setIsViewerOpen(true);
-          dismissToast(toastId);
-        } catch (parseError: any) {
-          dismissToast(toastId);
-          showError(`Failed to parse sheet: ${parseError.message}`);
-        }
-      };
-      reader.onerror = () => {
+        const arrayBuffer = await data.arrayBuffer();
+        const workbook = XLSX.read(arrayBuffer, { type: 'array' });
+        const sheetName = workbook.SheetNames[0];
+        if (!sheetName) throw new Error("No sheet found in the file.");
+        const worksheet = workbook.Sheets[sheetName];
+        const json = XLSX.utils.sheet_to_json(worksheet);
         dismissToast(toastId);
-        showError('Failed to read the downloaded file.');
-      };
-      reader.readAsArrayBuffer(data);
-
+        return json;
     } catch (error: any) {
-      dismissToast(toastId);
-      showError(error.message || 'Failed to download sheet.');
+        dismissToast(toastId);
+        showError(error.message || 'Failed to load sheet.');
+        return null;
+    }
+  };
+
+  const handleViewSheet = async (sheet: Sheet) => {
+    if (!checkDateAvailability(sheet)) return;
+    const jsonData = await loadSheetData(sheet);
+    if (jsonData) {
+      setCurrentSheetData(jsonData);
+      setCurrentSheet(sheet);
+      setIsViewerOpen(true);
     }
   };
 
   const handleDownloadSheet = async (sheet: Sheet) => {
     if (!checkDateAvailability(sheet)) return;
-
-    const toastId = showLoading(`Preparing ${sheet.sheet_name} for download...`);
-    try {
-      const { data, error } = await supabase.storage
-        .from('sheets')
-        .download(sheet.file_path);
-
-      if (error) throw error;
-
-      const url = window.URL.createObjectURL(data);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = sheet.sheet_name;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      window.URL.revokeObjectURL(url);
-
-      dismissToast(toastId);
-      showSuccess('Download started.');
-
-    } catch (error: any) {
-      dismissToast(toastId);
-      showError(error.message || 'Failed to download sheet.');
+    const jsonData = await loadSheetData(sheet);
+    if (jsonData) {
+      setSheetDataForDownload(jsonData);
+      setSheetToDownload(sheet);
+      setIsColumnSelectorOpen(true);
     }
   };
 
@@ -313,6 +291,14 @@ const CoeSheets = () => {
         showDuplicateGenerator={true}
         showBundleNumber={true}
       />
+      {sheetToDownload && (
+        <ColumnSelectionDialog
+          isOpen={isColumnSelectorOpen}
+          onClose={() => setIsColumnSelectorOpen(false)}
+          sheetData={sheetDataForDownload}
+          sheetName={sheetToDownload.sheet_name}
+        />
+      )}
     </div>
   );
 };
