@@ -3,9 +3,9 @@ import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { showError, showSuccess, showLoading, dismissToast } from '@/utils/toast';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { showError, showLoading, dismissToast } from '@/utils/toast';
 import StaffSheetViewerDialog from '@/components/StaffSheetViewerDialog';
-import * as XLSX from 'xlsx';
 import { Label } from '@/components/ui/label';
 
 interface Department {
@@ -19,13 +19,11 @@ interface Subject {
   subject_code: string;
 }
 
-interface Sheet {
+export interface Sheet {
   id: string;
   sheet_name: string;
   file_path: string;
   created_at: string;
-  start_date?: string | null;
-  end_date?: string | null;
   external_marks_added: boolean;
   subjects: {
     subject_code: string;
@@ -36,26 +34,46 @@ const StaffSheets = () => {
   const [departments, setDepartments] = useState<Department[]>([]);
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [academicTermOptions, setAcademicTermOptions] = useState<string[]>([]);
-  const [bundleOptions, setBundleOptions] = useState<string[]>([]);
+  const [sheets, setSheets] = useState<Sheet[]>([]);
   
   const [selectedDepartment, setSelectedDepartment] = useState<string>('');
   const [selectedSubject, setSelectedSubject] = useState<string>('');
   const [academicTerm, setAcademicTerm] = useState<string>('');
   const [selectedSemester, setSelectedSemester] = useState<string>('');
-  const [selectedBundle, setSelectedBundle] = useState<string>('');
   
   const [loading, setLoading] = useState({
     departments: true,
     subjects: false,
-    sheet: false,
-    bundles: false,
+    sheets: false,
   });
 
-  const [activeSheet, setActiveSheet] = useState<Sheet | null>(null);
-  const [fullSheetData, setFullSheetData] = useState<Record<string, any>[]>([]);
-  
+  const [sheetToView, setSheetToView] = useState<Sheet | null>(null);
   const [isViewerOpen, setIsViewerOpen] = useState(false);
-  const [bundleDataForViewer, setBundleDataForViewer] = useState<Record<string, any>[]>([]);
+
+  const fetchSheets = useCallback(async () => {
+    if (!selectedDepartment || !selectedSubject || !academicTerm || !selectedSemester) {
+      setSheets([]);
+      return;
+    }
+
+    setLoading(prev => ({ ...prev, sheets: true }));
+    const { data, error } = await supabase
+      .from('sheets')
+      .select('*, subjects(subject_code)')
+      .eq('department_id', selectedDepartment)
+      .eq('subject_id', selectedSubject)
+      .eq('year', academicTerm)
+      .eq('batch', selectedSemester)
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      showError('Failed to fetch sheets.');
+      setSheets([]);
+    } else {
+      setSheets(data as Sheet[]);
+    }
+    setLoading(prev => ({ ...prev, sheets: false }));
+  }, [selectedDepartment, selectedSubject, academicTerm, selectedSemester]);
 
   useEffect(() => {
     const generateAcademicTerms = () => {
@@ -106,128 +124,19 @@ const StaffSheets = () => {
   }, [selectedDepartment]);
 
   useEffect(() => {
-    const findSheetAndPrepareBundles = async () => {
-      setActiveSheet(null);
-      setFullSheetData([]);
-      setBundleOptions([]);
-      setSelectedBundle('');
+    fetchSheets();
+  }, [fetchSheets]);
 
-      if (!selectedDepartment || !selectedSubject || !academicTerm || !selectedSemester) {
-        return;
-      }
-
-      setLoading(prev => ({ ...prev, sheet: true, bundles: true }));
-      const toastId = showLoading('Finding matching sheet...');
-
-      try {
-        const { data: sheetData, error } = await supabase
-          .from('sheets')
-          .select('*, subjects(subject_code)')
-          .eq('department_id', selectedDepartment)
-          .eq('subject_id', selectedSubject)
-          .eq('year', academicTerm)
-          .eq('batch', selectedSemester)
-          .maybeSingle();
-
-        if (error) throw error;
-        if (!sheetData) {
-          throw new Error('No sheet found for the selected criteria. Please check your selections.');
-        }
-        
-        const foundSheet = sheetData as Sheet;
-        setActiveSheet(foundSheet);
-
-        dismissToast(toastId);
-        const downloadToastId = showLoading('Loading sheet data...');
-
-        const { data: fileData, error: downloadError } = await supabase.storage
-          .from('sheets')
-          .download(foundSheet.file_path);
-        
-        if (downloadError) throw downloadError;
-
-        const workbook = XLSX.read(await fileData.arrayBuffer(), { type: 'array' });
-        const sheetName = workbook.SheetNames[0];
-        if (!sheetName) throw new Error("No sheet found in the file.");
-        const worksheet = workbook.Sheets[sheetName];
-        const jsonData: Record<string, any>[] = XLSX.utils.sheet_to_json(worksheet);
-        setFullSheetData(jsonData);
-
-        if (jsonData.length > 0) {
-            const firstRowKeys = Object.keys(jsonData[0]);
-            const attendanceKey = firstRowKeys.find(k => k.toLowerCase() === 'attendance');
-            const duplicateNumberKey = firstRowKeys.find(k => k.toLowerCase().replace(/\s/g, '') === 'duplicatenumber');
-            const subjectCode = foundSheet.subjects?.subject_code;
-
-            if (!duplicateNumberKey || !subjectCode) {
-                throw new Error("Sheet is missing 'duplicate number' column or subject code is unavailable.");
-            }
-
-            const presentStudents = (attendanceKey 
-                ? jsonData.filter(row => String(row[attendanceKey]).trim().toLowerCase() === 'present')
-                : jsonData
-            ).sort((a, b) => (Number(a[duplicateNumberKey]) || 0) - (Number(b[duplicateNumberKey]) || 0));
-
-            const subjectCodePrefix = subjectCode.slice(0, 6);
-            const bundles = new Set<string>();
-            presentStudents.forEach((_, index) => {
-                const bundleName = `${subjectCodePrefix}-${String(Math.floor(index / 20) + 1).padStart(2, '0')}`;
-                bundles.add(bundleName);
-            });
-            setBundleOptions(Array.from(bundles));
-        }
-
-        dismissToast(downloadToastId);
-      } catch (err: any) {
-        dismissToast(toastId);
-        showError(err.message || 'An error occurred.');
-        setActiveSheet(null);
-        setFullSheetData([]);
-        setBundleOptions([]);
-        setSelectedBundle('');
-      } finally {
-        setLoading(prev => ({ ...prev, sheet: false, bundles: false }));
-      }
-    };
-
-    findSheetAndPrepareBundles();
-  }, [selectedDepartment, selectedSubject, academicTerm, selectedSemester]);
-
-  const handleEditMarks = () => {
-    if (!selectedBundle || !activeSheet || fullSheetData.length === 0) return;
-
-    const firstRowKeys = Object.keys(fullSheetData[0]);
-    const attendanceKey = firstRowKeys.find(k => k.toLowerCase() === 'attendance');
-    const duplicateNumberKey = firstRowKeys.find(k => k.toLowerCase().replace(/\s/g, '') === 'duplicatenumber');
-    const subjectCode = activeSheet.subjects?.subject_code;
-
-    if (!duplicateNumberKey || !subjectCode) {
-        showError("Cannot determine bundle data. Sheet is missing required columns.");
-        return;
-    }
-
-    const presentStudents = (attendanceKey 
-        ? fullSheetData.filter(row => String(row[attendanceKey]).trim().toLowerCase() === 'present')
-        : fullSheetData
-    ).sort((a, b) => (Number(a[duplicateNumberKey]) || 0) - (Number(b[duplicateNumberKey]) || 0));
-
-    const subjectCodePrefix = subjectCode.slice(0, 6);
-    const bundleStudents = presentStudents.filter((_, index) => {
-        const bundleName = `${subjectCodePrefix}-${String(Math.floor(index / 20) + 1).padStart(2, '0')}`;
-        return bundleName === selectedBundle;
-    });
-
-    setBundleDataForViewer(bundleStudents);
+  const handleOpenSheet = (sheet: Sheet) => {
+    setSheetToView(sheet);
     setIsViewerOpen(true);
   };
 
   const handleViewerClose = (didSave: boolean) => {
     setIsViewerOpen(false);
+    setSheetToView(null);
     if (didSave) {
-      setSelectedBundle('');
-      setBundleOptions([]);
-      setActiveSheet(null);
-      setSelectedSemester('');
+      fetchSheets();
     }
   };
 
@@ -241,90 +150,108 @@ const StaffSheets = () => {
       
       <Card>
         <CardHeader>
-          <CardTitle>Select Sheet and Bundle</CardTitle>
+          <CardTitle>Select Sheet Criteria</CardTitle>
         </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            <div>
-              <Label>Department</Label>
-              <Select onValueChange={setSelectedDepartment} value={selectedDepartment} disabled={loading.departments}>
-                <SelectTrigger>
-                  <SelectValue placeholder={loading.departments ? "Loading..." : "Select department"} />
-                </SelectTrigger>
-                <SelectContent>
-                  {departments.map(dept => (
-                    <SelectItem key={dept.id} value={dept.id}>{dept.department_name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label>Academic Term</Label>
-              <Select onValueChange={(value) => { setAcademicTerm(value); setSelectedSemester(''); }} value={academicTerm}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select term" />
-                </SelectTrigger>
-                <SelectContent>
-                  {academicTermOptions.map(term => (
-                    <SelectItem key={term} value={term}>{term}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label>Semester</Label>
-              <Select onValueChange={setSelectedSemester} value={selectedSemester} disabled={!academicTerm}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select semester" />
-                </SelectTrigger>
-                <SelectContent>
-                  {semesterOptions.map(sem => (
-                    <SelectItem key={sem} value={sem}>{sem}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label>Subject</Label>
-              <Select onValueChange={setSelectedSubject} value={selectedSubject} disabled={!selectedDepartment || loading.subjects}>
-                <SelectTrigger>
-                  <SelectValue placeholder={loading.subjects ? "Loading..." : "Select subject"} />
-                </SelectTrigger>
-                <SelectContent>
-                  {subjects.map(sub => (
-                    <SelectItem key={sub.id} value={sub.id}>{sub.subject_name} ({sub.subject_code})</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label>Bundle Number</Label>
-              <Select onValueChange={setSelectedBundle} value={selectedBundle} disabled={!activeSheet || loading.bundles}>
-                <SelectTrigger>
-                  <SelectValue placeholder={loading.bundles ? "Loading..." : "Select bundle"} />
-                </SelectTrigger>
-                <SelectContent>
-                  {bundleOptions.map(bundle => (
-                    <SelectItem key={bundle} value={bundle}>{bundle}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+        <CardContent className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-4">
+          <div>
+            <Label>Department</Label>
+            <Select onValueChange={setSelectedDepartment} value={selectedDepartment} disabled={loading.departments}>
+              <SelectTrigger>
+                <SelectValue placeholder={loading.departments ? "Loading..." : "Select department"} />
+              </SelectTrigger>
+              <SelectContent>
+                {departments.map(dept => (
+                  <SelectItem key={dept.id} value={dept.id}>{dept.department_name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
-          <div className="flex justify-end pt-4">
-            <Button onClick={handleEditMarks} disabled={!selectedBundle || !!activeSheet?.external_marks_added}>
-              {activeSheet?.external_marks_added ? 'Marks Already Added' : 'Edit Marks'}
-            </Button>
+          <div>
+            <Label>Subject</Label>
+            <Select onValueChange={setSelectedSubject} value={selectedSubject} disabled={!selectedDepartment || loading.subjects}>
+              <SelectTrigger>
+                <SelectValue placeholder={loading.subjects ? "Loading..." : "Select subject"} />
+              </SelectTrigger>
+              <SelectContent>
+                {subjects.map(sub => (
+                  <SelectItem key={sub.id} value={sub.id}>{sub.subject_name} ({sub.subject_code})</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
+          <div>
+            <Label>Academic Term</Label>
+            <Select onValueChange={(value) => { setAcademicTerm(value); setSelectedSemester(''); }} value={academicTerm}>
+              <SelectTrigger>
+                <SelectValue placeholder="Select term" />
+              </SelectTrigger>
+              <SelectContent>
+                {academicTermOptions.map(term => (
+                  <SelectItem key={term} value={term}>{term}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <Label>Semester</Label>
+            <Select onValueChange={setSelectedSemester} value={selectedSemester} disabled={!academicTerm}>
+              <SelectTrigger>
+                <SelectValue placeholder="Select semester" />
+              </SelectTrigger>
+              <SelectContent>
+                {semesterOptions.map(sem => (
+                  <SelectItem key={sem} value={sem}>{sem}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader><CardTitle>Available Sheets</CardTitle></CardHeader>
+        <CardContent>
+          {loading.sheets ? <p>Loading sheets...</p> : (
+            <div className="border rounded-lg">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Sheet Name</TableHead>
+                    <TableHead>Uploaded At</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {sheets.length > 0 ? sheets.map(sheet => (
+                    <TableRow key={sheet.id}>
+                      <TableCell className="font-medium">{sheet.sheet_name}</TableCell>
+                      <TableCell>{new Date(sheet.created_at).toLocaleString()}</TableCell>
+                      <TableCell>{sheet.external_marks_added ? 'Finished' : 'Pending'}</TableCell>
+                      <TableCell className="text-right">
+                        <Button onClick={() => handleOpenSheet(sheet)} disabled={sheet.external_marks_added}>
+                          {sheet.external_marks_added ? 'Completed' : 'Update Marks'}
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  )) : (
+                    <TableRow>
+                      <TableCell colSpan={4} className="text-center">
+                        No sheets found for the selected criteria.
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </div>
+          )}
         </CardContent>
       </Card>
 
       <StaffSheetViewerDialog
         isOpen={isViewerOpen}
         onClose={handleViewerClose}
-        sheet={activeSheet}
-        sheetData={bundleDataForViewer}
-        fullSheetData={fullSheetData}
+        sheet={sheetToView}
       />
     </div>
   );
