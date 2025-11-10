@@ -23,11 +23,20 @@ import { supabase } from "@/integrations/supabase/client";
 import { showLoading, dismissToast, showSuccess, showError } from "@/utils/toast";
 import * as XLSX from 'xlsx';
 import { Sheet } from "@/pages/StaffSheets";
+import ExaminerDetailsDialog from "./ExaminerDetailsDialog";
+import jsPDF from 'jspdf';
+import 'jspdf-autotable';
+import { numberToWords } from "@/utils/numberToWords";
 
-interface StaffSheetViewerDialogProps {
-  isOpen: boolean;
-  onClose: (didSave: boolean) => void;
-  sheet: Sheet | null;
+interface ExaminerDetails {
+    internal_examiner_name: string;
+    internal_examiner_designation: string;
+    internal_examiner_department: string;
+    internal_examiner_college: string;
+    chief_name?: string;
+    chief_designation?: string;
+    chief_department?: string;
+    chief_college?: string;
 }
 
 const StaffSheetViewerDialog = ({ isOpen, onClose, sheet }: StaffSheetViewerDialogProps) => {
@@ -41,19 +50,33 @@ const StaffSheetViewerDialog = ({ isOpen, onClose, sheet }: StaffSheetViewerDial
   
   const [duplicateNumberKey, setDuplicateNumberKey] = useState<string | null>(null);
   const [externalMarkKey, setExternalMarkKey] = useState<string | null>(null);
-  const [hasSaved, setHasSaved] = useState(false);
+  
+  const [view, setView] = useState<'loading' | 'marks' | 'submitted'>('loading');
+  const [examinerDetails, setExaminerDetails] = useState<ExaminerDetails | null>(null);
+  const [isExaminerFormOpen, setIsExaminerFormOpen] = useState(false);
+
+  const resetState = () => {
+    setFullSheetData([]);
+    setBundleOptions([]);
+    setSelectedBundle('');
+    setEditedData([]);
+    setIsSaving(false);
+    setLoading(false);
+    setDuplicateNumberKey(null);
+    setExternalMarkKey(null);
+    setView('loading');
+    setExaminerDetails(null);
+    setIsExaminerFormOpen(false);
+  };
 
   useEffect(() => {
     const loadSheetData = async () => {
       if (!isOpen || !sheet) return;
-
+      resetState();
       setLoading(true);
-      const toastId = showLoading('Loading sheet data...');
+
       try {
-        const { data: fileData, error: downloadError } = await supabase.storage
-          .from('sheets')
-          .download(sheet.file_path);
-        
+        const { data: fileData, error: downloadError } = await supabase.storage.from('sheets').download(sheet.file_path);
         if (downloadError) throw downloadError;
 
         const workbook = XLSX.read(await fileData.arrayBuffer(), { type: 'array' });
@@ -70,76 +93,79 @@ const StaffSheetViewerDialog = ({ isOpen, onClose, sheet }: StaffSheetViewerDial
             const extKey = firstRowKeys.find(k => k.toLowerCase().replace(/\s/g, '') === 'externalmark');
             const subjectCode = sheet.subjects?.subject_code;
 
-            if (!dupKey || !extKey || !subjectCode) {
-                throw new Error("Sheet is missing required columns (duplicate number, external mark) or subject code.");
-            }
+            if (!dupKey || !extKey || !subjectCode) throw new Error("Sheet is missing required columns or subject code.");
+            
             setDuplicateNumberKey(dupKey);
             setExternalMarkKey(extKey);
 
-            const presentStudents = (attKey 
-                ? jsonData.filter(row => String(row[attKey]).trim().toLowerCase() === 'present')
-                : jsonData
-            ).sort((a, b) => (Number(a[dupKey]) || 0) - (Number(b[dupKey]) || 0));
+            const presentStudents = (attKey ? jsonData.filter(row => String(row[attKey]).trim().toLowerCase() === 'present') : jsonData)
+                .sort((a, b) => (Number(a[dupKey]) || 0) - (Number(b[dupKey]) || 0));
 
             const subjectCodePrefix = subjectCode.slice(0, 6);
             const bundles = new Set<string>();
             presentStudents.forEach((_, index) => {
-                const bundleName = `${subjectCodePrefix}-${String(Math.floor(index / 20) + 1).padStart(2, '0')}`;
-                bundles.add(bundleName);
+                bundles.add(`${subjectCodePrefix}-${String(Math.floor(index / 20) + 1).padStart(2, '0')}`);
             });
             setBundleOptions(Array.from(bundles));
+            setView('marks');
+        } else {
+            setView('marks'); // Show empty state
         }
-        dismissToast(toastId);
       } catch (err: any) {
-        dismissToast(toastId);
         showError(err.message || 'Failed to load sheet data.');
         onClose(false);
       } finally {
         setLoading(false);
       }
     };
-
     loadSheetData();
-
-    return () => { // Cleanup on close
-      setFullSheetData([]);
-      setBundleOptions([]);
-      setSelectedBundle('');
-      setEditedData([]);
-      setHasSaved(false);
-    };
   }, [isOpen, sheet]);
 
   useEffect(() => {
-    if (!selectedBundle || fullSheetData.length === 0 || !duplicateNumberKey || !sheet?.subjects?.subject_code) {
-      setEditedData([]);
-      return;
-    }
+    const checkBundleStatus = async () => {
+        if (!selectedBundle || !sheet) {
+            setEditedData([]);
+            setView('marks');
+            return;
+        }
 
-    const attKey = Object.keys(fullSheetData[0]).find(k => k.toLowerCase() === 'attendance');
-    const presentStudents = (attKey 
-        ? fullSheetData.filter(row => String(row[attKey]).trim().toLowerCase() === 'present')
-        : fullSheetData
-    ).sort((a, b) => (Number(a[duplicateNumberKey]) || 0) - (Number(b[duplicateNumberKey]) || 0));
+        const { data, error } = await supabase.from('bundle_examiners')
+            .select('*').eq('sheet_id', sheet.id).eq('bundle_number', selectedBundle).maybeSingle();
+        
+        if (error) {
+            showError("Could not check bundle status.");
+            return;
+        }
 
-    const subjectCodePrefix = sheet.subjects.subject_code.slice(0, 6);
-    const bundleStudents = presentStudents.filter((_, index) => {
-        const bundleName = `${subjectCodePrefix}-${String(Math.floor(index / 20) + 1).padStart(2, '0')}`;
-        return bundleName === selectedBundle;
-    });
+        const attKey = fullSheetData.length > 0 ? Object.keys(fullSheetData[0]).find(k => k.toLowerCase() === 'attendance') : null;
+        const presentStudents = (attKey ? fullSheetData.filter(row => String(row[attKey]).trim().toLowerCase() === 'present') : fullSheetData)
+            .sort((a, b) => (Number(duplicateNumberKey && b[duplicateNumberKey]) || 0) - (Number(duplicateNumberKey && a[duplicateNumberKey]) || 0));
+        
+        const subjectCodePrefix = sheet.subjects?.subject_code?.slice(0, 6);
+        const bundleStudents = presentStudents.filter((_, index) => {
+            const bundleName = `${subjectCodePrefix}-${String(Math.floor(index / 20) + 1).padStart(2, '0')}`;
+            return bundleName === selectedBundle;
+        });
+        setEditedData(JSON.parse(JSON.stringify(bundleStudents)));
 
-    setEditedData(JSON.parse(JSON.stringify(bundleStudents)));
-  }, [selectedBundle, fullSheetData, duplicateNumberKey, sheet]);
+        if (data) {
+            setExaminerDetails(data);
+            setView('submitted');
+        } else {
+            setExaminerDetails(null);
+            setView('marks');
+        }
+    };
+    checkBundleStatus();
+  }, [selectedBundle, sheet, fullSheetData]);
 
   const handleMarkChange = (rowIndex: number, value: string) => {
     if (!externalMarkKey) return;
-    
     const mark = parseInt(value, 10);
     if (value !== '' && (isNaN(mark) || mark < 0 || mark > 100)) {
       showError("Mark must be a number between 0 and 100.");
       return;
     }
-
     const newData = [...editedData];
     newData[rowIndex][externalMarkKey] = value === '' ? '' : mark;
     setEditedData(newData);
@@ -147,114 +173,159 @@ const StaffSheetViewerDialog = ({ isOpen, onClose, sheet }: StaffSheetViewerDial
 
   const handleSaveChanges = async () => {
     if (!sheet || !externalMarkKey || !duplicateNumberKey) return;
-
     setIsSaving(true);
-    const toastId = showLoading("Saving external marks...");
-
+    const toastId = showLoading("Saving marks...");
     try {
       const editedMarksMap = new Map(editedData.map(row => [row[duplicateNumberKey], row[externalMarkKey]]));
       const updatedSheetData = fullSheetData.map(row => {
         const dupNum = row[duplicateNumberKey];
-        if (editedMarksMap.has(dupNum)) {
-          return { ...row, [externalMarkKey]: editedMarksMap.get(dupNum) };
-        }
-        return row;
+        return editedMarksMap.has(dupNum) ? { ...row, [externalMarkKey]: editedMarksMap.get(dupNum) } : row;
       });
 
       const newWorksheet = XLSX.utils.json_to_sheet(updatedSheetData);
       const newWorkbook = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(newWorkbook, newWorksheet, 'Sheet1');
-      
       const wbout = XLSX.write(newWorkbook, { bookType: 'xlsx', type: 'array' });
       const blob = new Blob([wbout], { type: 'application/octet-stream' });
       
       await supabase.storage.from('sheets').update(sheet.file_path, blob, { upsert: true });
-
-      const allBundlesFinished = updatedSheetData
-        .filter(row => row[externalMarkKey] !== undefined)
-        .every(row => String(row[externalMarkKey]).trim() !== '');
-
-      if (allBundlesFinished) {
-        await supabase.from('sheets').update({ external_marks_added: true }).eq('id', sheet.id);
-      }
-
-      setHasSaved(true);
+      setFullSheetData(updatedSheetData); // Update in-memory data
       dismissToast(toastId);
-      showSuccess("External marks saved successfully!");
-      onClose(true);
-
+      showSuccess("Marks saved! Please provide examiner details.");
+      setIsExaminerFormOpen(true);
     } catch (error: any) {
       dismissToast(toastId);
-      showError(error.message || "Failed to save the sheet.");
+      showError(error.message || "Failed to save marks.");
     } finally {
       setIsSaving(false);
     }
   };
 
-  return (
-    <Dialog open={isOpen} onOpenChange={(open) => !open && onClose(hasSaved)}>
-      <DialogContent className="sm:max-w-[600px] max-h-[90vh] flex flex-col">
-        <DialogHeader><DialogTitle>{sheet?.sheet_name || 'Update Marks'}</DialogTitle></DialogHeader>
-        
-        {loading ? <p className="text-center py-8">Loading...</p> : (
-          <>
-            <div className="mb-4">
-              <Label>Bundle Number</Label>
-              <Select onValueChange={setSelectedBundle} value={selectedBundle} disabled={bundleOptions.length === 0}>
-                <SelectTrigger>
-                  <SelectValue placeholder={bundleOptions.length > 0 ? "Select bundle" : "No bundles found"} />
-                </SelectTrigger>
-                <SelectContent>
-                  {bundleOptions.map(bundle => (
-                    <SelectItem key={bundle} value={bundle}>{bundle}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+  const handleExaminerSuccess = (data: ExaminerDetails) => {
+    setExaminerDetails(data);
+    setIsExaminerFormOpen(false);
+    setView('submitted');
+  };
 
-            <div className="flex-grow overflow-hidden min-h-0">
-              <ScrollArea className="h-[50vh] w-full rounded-md border">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>{duplicateNumberKey || 'Duplicate Number'}</TableHead>
-                      <TableHead>{externalMarkKey || 'External Mark'}</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {editedData.length > 0 ? editedData.map((row, rowIndex) => (
-                      <TableRow key={rowIndex}>
-                        <TableCell>{row[duplicateNumberKey]}</TableCell>
-                        <TableCell>
-                          <Input
-                            type="number"
-                            min="0"
-                            max="100"
-                            value={row[externalMarkKey] || ''}
-                            onChange={(e) => handleMarkChange(rowIndex, e.target.value)}
-                            className="w-24"
-                          />
-                        </TableCell>
-                      </TableRow>
-                    )) : (
+  const handleDownloadPdf = () => {
+    if (!sheet || !examinerDetails || !editedData.length || !externalMarkKey || !duplicateNumberKey) {
+        showError("Cannot generate PDF. Data is missing.");
+        return;
+    }
+    const doc = new jsPDF();
+    
+    // Header
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(16);
+    doc.text("ADHIYAMAAN COLLEGE OF ENGINEERING", doc.internal.pageSize.getWidth() / 2, 20, { align: 'center' });
+    doc.setFontSize(12);
+    doc.text("(An Autonomous Institution)", doc.internal.pageSize.getWidth() / 2, 27, { align: 'center' });
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(10);
+    doc.text("Affiliated to Anna University, Chennai", doc.internal.pageSize.getWidth() / 2, 34, { align: 'center' });
+    doc.setFontSize(9);
+    doc.text("Dr. M. G. R. Nagar, Hosur - 635130", doc.internal.pageSize.getWidth() / 2, 40, { align: 'center' });
+
+    // Sub-header
+    doc.setFontSize(11);
+    doc.text(`Academic Year: ${sheet.year || 'N/A'}`, 15, 55);
+    doc.text(`Semester: ${sheet.batch || 'N/A'}`, 15, 62);
+    doc.text(`Subject: ${sheet.subjects?.subject_code || 'N/A'} - ${sheet.subjects?.subject_name || 'N/A'}`, doc.internal.pageSize.getWidth() - 15, 55, { align: 'right' });
+    doc.text(`Bundle Number: ${selectedBundle}`, doc.internal.pageSize.getWidth() - 15, 62, { align: 'right' });
+
+    // Table
+    const tableData = editedData.map(row => [
+        row[duplicateNumberKey],
+        row[externalMarkKey],
+        numberToWords(parseInt(row[externalMarkKey], 10) || 0)
+    ]);
+    (doc as any).autoTable({
+        startY: 70,
+        head: [['Duplicate Number', 'External Mark', 'Mark in Words']],
+        body: tableData,
+        theme: 'grid',
+    });
+
+    // Footer
+    const finalY = (doc as any).lastAutoTable.finalY + 15;
+    doc.setFont('helvetica', 'bold');
+    doc.text("Internal Examiner", 15, finalY);
+    doc.text("CHIEF", doc.internal.pageSize.getWidth() / 2 + 15, finalY);
+    
+    doc.setFont('helvetica', 'normal');
+    const examinerX = 15;
+    const chiefX = doc.internal.pageSize.getWidth() / 2 + 15;
+    let currentY = finalY + 7;
+
+    const addDetail = (label: string, value: string, x: number, y: number) => {
+        doc.setFont('helvetica', 'bold');
+        doc.text(`${label}:`, x, y);
+        doc.setFont('helvetica', 'normal');
+        doc.text(value, x + 30, y);
+    };
+
+    addDetail("Name", examinerDetails.internal_examiner_name, examinerX, currentY);
+    addDetail("Name", examinerDetails.chief_name || '-', chiefX, currentY);
+    currentY += 7;
+    addDetail("Designation", examinerDetails.internal_examiner_designation, examinerX, currentY);
+    addDetail("Designation", examinerDetails.chief_designation || '-', chiefX, currentY);
+    currentY += 7;
+    addDetail("Department", examinerDetails.internal_examiner_department, examinerX, currentY);
+    addDetail("Department", examinerDetails.chief_department || '-', chiefX, currentY);
+    currentY += 7;
+    addDetail("College", examinerDetails.internal_examiner_college, examinerX, currentY);
+    addDetail("College", examinerDetails.chief_college || '-', chiefX, currentY);
+
+    doc.save(`${selectedBundle}_marks.pdf`);
+  };
+
+  return (
+    <>
+      <Dialog open={isOpen} onOpenChange={(open) => !open && onClose(view === 'submitted')}>
+        <DialogContent className="sm:max-w-[600px] max-h-[90vh] flex flex-col">
+          <DialogHeader><DialogTitle>{sheet?.sheet_name || 'Update Marks'}</DialogTitle></DialogHeader>
+          
+          {loading ? <p className="text-center py-8">Loading...</p> : (
+            <>
+              <div className="mb-4">
+                <Label>Bundle Number</Label>
+                <Select onValueChange={setSelectedBundle} value={selectedBundle} disabled={bundleOptions.length === 0}>
+                  <SelectTrigger><SelectValue placeholder={bundleOptions.length > 0 ? "Select bundle" : "No bundles found"} /></SelectTrigger>
+                  <SelectContent>{bundleOptions.map(b => <SelectItem key={b} value={b}>{b}</SelectItem>)}</SelectContent>
+                </Select>
+              </div>
+
+              <div className="flex-grow overflow-hidden min-h-0">
+                <ScrollArea className="h-[50vh] w-full rounded-md border">
+                  <Table>
+                    <TableHeader>
                       <TableRow>
-                        <TableCell colSpan={2} className="text-center h-24">
-                          {selectedBundle ? 'This bundle is empty.' : 'Please select a bundle to view students.'}
-                        </TableCell>
+                        <TableHead>{duplicateNumberKey || 'Duplicate Number'}</TableHead>
+                        <TableHead>{externalMarkKey || 'External Mark'}</TableHead>
                       </TableRow>
-                    )}
-                  </TableBody>
-                </Table>
-              </ScrollArea>
-            </div>
-            <DialogFooter>
-              <Button variant="outline" onClick={() => onClose(hasSaved)}>Close</Button>
-              <Button onClick={handleSaveChanges} disabled={isSaving || editedData.length === 0}>
-                {isSaving ? 'Saving...' : 'Save Changes'}
-              </Button>
-            </DialogFooter>
-          </>
-        )}
+                    </TableHeader>
+                    <TableBody>
+                      {editedData.length > 0 ? editedData.map((row, rowIndex) => (
+                        <TableRow key={rowIndex}>
+                          <TableCell>{row[duplicateNumberKey]}</TableCell>
+                          <TableCell>
+                            <Input type="number" min="0" max="100" value={row[externalMarkKey] || ''}
+                              onChange={(e) => handleMarkChange(rowIndex, e.target.value)}
+                              className="w-24" disabled={view === 'submitted'}/>
+                          </TableCell>
+                        </TableRow>
+                      )) : (
+                        <TableRow><TableCell colSpan={2} className="text-center h-24">
+                          {selectedBundle ? 'This bundle is empty.' : 'Please select a bundle.'}
+                        </TableCell></TableRow>
+                      )}
+                    </TableBody>
+                  </Table>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+          )}
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   );

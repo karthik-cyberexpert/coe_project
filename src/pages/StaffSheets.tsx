@@ -25,8 +25,11 @@ export interface Sheet {
   file_path: string;
   created_at: string;
   external_marks_added: boolean;
+  year: string | null;
+  batch: string | null;
   subjects: {
     subject_code: string;
+    subject_name: string;
   } | null;
 }
 
@@ -59,7 +62,7 @@ const StaffSheets = () => {
     setLoading(prev => ({ ...prev, sheets: true }));
     const { data, error } = await supabase
       .from('sheets')
-      .select('*, subjects(subject_code)')
+      .select('*, subjects(subject_code, subject_name)')
       .eq('department_id', selectedDepartment)
       .eq('subject_id', selectedSubject)
       .eq('year', academicTerm)
@@ -229,8 +232,8 @@ const StaffSheets = () => {
                       <TableCell>{new Date(sheet.created_at).toLocaleString()}</TableCell>
                       <TableCell>{sheet.external_marks_added ? 'Finished' : 'Pending'}</TableCell>
                       <TableCell className="text-right">
-                        <Button onClick={() => handleOpenSheet(sheet)} disabled={sheet.external_marks_added}>
-                          {sheet.external_marks_added ? 'Completed' : 'Update Marks'}
+                        <Button onClick={() => handleOpenSheet(sheet)}>
+                          {sheet.external_marks_added ? 'View Details' : 'Update Marks'}
                         </Button>
                       </TableCell>
                     </TableRow>
