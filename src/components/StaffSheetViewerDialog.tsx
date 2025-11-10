@@ -43,9 +43,10 @@ interface StaffSheetViewerDialogProps {
   isOpen: boolean;
   onClose: (didSave: boolean) => void;
   sheet: Sheet | null;
+  sheetData?: Record<string, any>[];
 }
 
-const StaffSheetViewerDialog = ({ isOpen, onClose, sheet }: StaffSheetViewerDialogProps) => {
+const StaffSheetViewerDialog = ({ isOpen, onClose, sheet, sheetData }: StaffSheetViewerDialogProps) => {
   const [fullSheetData, setFullSheetData] = useState<Record<string, any>[]>([]);
   const [bundleOptions, setBundleOptions] = useState<string[]>([]);
   const [selectedBundle, setSelectedBundle] = useState<string>('');
@@ -82,14 +83,20 @@ const StaffSheetViewerDialog = ({ isOpen, onClose, sheet }: StaffSheetViewerDial
       setLoading(true);
 
       try {
-        const { data: fileData, error: downloadError } = await supabase.storage.from('sheets').download(sheet.file_path);
-        if (downloadError) throw downloadError;
+        let jsonData: Record<string, any>[] = [];
+        if (sheetData) {
+          jsonData = sheetData;
+        } else {
+          const { data: fileData, error: downloadError } = await supabase.storage.from('sheets').download(sheet.file_path);
+          if (downloadError) throw downloadError;
 
-        const workbook = XLSX.read(await fileData.arrayBuffer(), { type: 'array' });
-        const sheetName = workbook.SheetNames[0];
-        if (!sheetName) throw new Error("No sheet found in the file.");
-        const worksheet = workbook.Sheets[sheetName];
-        const jsonData: Record<string, any>[] = XLSX.utils.sheet_to_json(worksheet);
+          const workbook = XLSX.read(await fileData.arrayBuffer(), { type: 'array' });
+          const sheetName = workbook.SheetNames[0];
+          if (!sheetName) throw new Error("No sheet found in the file.");
+          const worksheet = workbook.Sheets[sheetName];
+          jsonData = XLSX.utils.sheet_to_json(worksheet);
+        }
+        
         setFullSheetData(jsonData);
 
         if (jsonData.length > 0) {
@@ -125,11 +132,11 @@ const StaffSheetViewerDialog = ({ isOpen, onClose, sheet }: StaffSheetViewerDial
       }
     };
     loadSheetData();
-  }, [isOpen, sheet]);
+  }, [isOpen, sheet, sheetData]);
 
   useEffect(() => {
     const checkBundleStatus = async () => {
-        if (!selectedBundle || !sheet) {
+        if (!selectedBundle || !sheet || !duplicateNumberKey) {
             setEditedData([]);
             setView('marks');
             return;
@@ -145,7 +152,7 @@ const StaffSheetViewerDialog = ({ isOpen, onClose, sheet }: StaffSheetViewerDial
 
         const attKey = fullSheetData.length > 0 ? Object.keys(fullSheetData[0]).find(k => k.toLowerCase() === 'attendance') : null;
         const presentStudents = (attKey ? fullSheetData.filter(row => String(row[attKey]).trim().toLowerCase() === 'present') : fullSheetData)
-            .sort((a, b) => (Number(duplicateNumberKey && b[duplicateNumberKey]) || 0) - (Number(duplicateNumberKey && a[duplicateNumberKey]) || 0));
+            .sort((a, b) => (Number(a[duplicateNumberKey]) || 0) - (Number(b[duplicateNumberKey]) || 0));
         
         const subjectCodePrefix = sheet.subjects?.subject_code?.slice(0, 6);
         const bundleStudents = presentStudents.filter((_, index) => {
@@ -163,7 +170,7 @@ const StaffSheetViewerDialog = ({ isOpen, onClose, sheet }: StaffSheetViewerDial
         }
     };
     checkBundleStatus();
-  }, [selectedBundle, sheet, fullSheetData]);
+  }, [selectedBundle, sheet, fullSheetData, duplicateNumberKey]);
 
   const handleMarkChange = (rowIndex: number, value: string) => {
     if (!externalMarkKey) return;
