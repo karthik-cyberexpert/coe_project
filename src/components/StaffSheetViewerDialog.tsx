@@ -39,6 +39,12 @@ interface ExaminerDetails {
     chief_college?: string;
 }
 
+interface StaffSheetViewerDialogProps {
+  isOpen: boolean;
+  onClose: (didSave: boolean) => void;
+  sheet: Sheet | null;
+}
+
 const StaffSheetViewerDialog = ({ isOpen, onClose, sheet }: StaffSheetViewerDialogProps) => {
   const [fullSheetData, setFullSheetData] = useState<Record<string, any>[]>([]);
   const [bundleOptions, setBundleOptions] = useState<string[]>([]);
@@ -321,13 +327,32 @@ const StaffSheetViewerDialog = ({ isOpen, onClose, sheet }: StaffSheetViewerDial
                       )}
                     </TableBody>
                   </Table>
-                </DialogFooter>
-              </DialogContent>
-            </Dialog>
+                </ScrollArea>
+              </div>
+              <DialogFooter>
+                {view === 'submitted' ? (
+                  <Button onClick={handleDownloadPdf}>Download PDF</Button>
+                ) : (
+                  <Button onClick={handleSaveChanges} disabled={isSaving || editedData.length === 0}>
+                    {isSaving ? 'Saving...' : 'Save & Finalize'}
+                  </Button>
+                )}
+              </DialogFooter>
+            </>
           )}
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+        </DialogContent>
+      </Dialog>
+
+      {sheet && selectedBundle && (
+        <ExaminerDetailsDialog
+          isOpen={isExaminerFormOpen}
+          onClose={() => setIsExaminerFormOpen(false)}
+          onSuccess={handleExaminerSuccess}
+          sheetId={sheet.id}
+          bundleNumber={selectedBundle}
+        />
+      )}
+    </>
   );
 };
 
