@@ -101,7 +101,6 @@ const StaffSheetViewerDialog = ({ isOpen, onClose, sheet, sheetData }: StaffShee
 
         if (jsonData.length > 0) {
             const firstRowKeys = Object.keys(jsonData[0]);
-            const attKey = firstRowKeys.find(k => k.toLowerCase() === 'attendance');
             const dupKey = firstRowKeys.find(k => k.toLowerCase().replace(/\s/g, '') === 'duplicatenumber');
             const extKey = firstRowKeys.find(k => k.toLowerCase().replace(/\s/g, '') === 'externalmark');
             const subjectCode = sheet.subjects?.subject_code;
@@ -111,7 +110,8 @@ const StaffSheetViewerDialog = ({ isOpen, onClose, sheet, sheetData }: StaffShee
             setDuplicateNumberKey(dupKey);
             setExternalMarkKey(extKey);
 
-            const presentStudents = (attKey ? jsonData.filter(row => String(row[attKey]).trim().toLowerCase() === 'present') : jsonData)
+            const presentStudents = jsonData
+                .filter(row => row[dupKey] !== null && row[dupKey] !== undefined && String(row[dupKey]).trim() !== '')
                 .sort((a, b) => (Number(a[dupKey]) || 0) - (Number(b[dupKey]) || 0));
 
             const subjectCodePrefix = subjectCode.slice(0, 6);
@@ -150,8 +150,8 @@ const StaffSheetViewerDialog = ({ isOpen, onClose, sheet, sheetData }: StaffShee
             return;
         }
 
-        const attKey = fullSheetData.length > 0 ? Object.keys(fullSheetData[0]).find(k => k.toLowerCase() === 'attendance') : null;
-        const presentStudents = (attKey ? fullSheetData.filter(row => String(row[attKey]).trim().toLowerCase() === 'present') : fullSheetData)
+        const presentStudents = fullSheetData
+            .filter(row => row[duplicateNumberKey] !== null && row[duplicateNumberKey] !== undefined && String(row[duplicateNumberKey]).trim() !== '')
             .sort((a, b) => (Number(a[duplicateNumberKey]) || 0) - (Number(b[duplicateNumberKey]) || 0));
         
         const subjectCodePrefix = sheet.subjects?.subject_code?.slice(0, 6);
