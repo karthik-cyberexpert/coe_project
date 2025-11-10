@@ -396,9 +396,9 @@ const Sheets = () => {
         <CardHeader>
           <CardTitle>Upload New Sheet</CardTitle>
         </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
+        <CardContent>
+          <div className="flex flex-wrap items-end gap-4">
+            <div className="flex-grow" style={{ minWidth: '180px' }}>
               <label className="block text-sm font-medium text-gray-700 mb-1">Department</label>
               <Select onValueChange={setSelectedDepartment} value={selectedDepartment} disabled={loadingDepartments}>
                 <SelectTrigger>
@@ -411,7 +411,7 @@ const Sheets = () => {
                 </SelectContent>
               </Select>
             </div>
-            <div>
+            <div className="flex-grow" style={{ minWidth: '180px' }}>
               <label className="block text-sm font-medium text-gray-700 mb-1">Subject</label>
               <Select onValueChange={setSelectedSubject} value={selectedSubject} disabled={!selectedDepartment || loadingSubjects}>
                 <SelectTrigger>
@@ -424,9 +424,7 @@ const Sheets = () => {
                 </SelectContent>
               </Select>
             </div>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
+            <div className="flex-grow" style={{ minWidth: '180px' }}>
               <label className="block text-sm font-medium text-gray-700 mb-1">Academic Term</label>
               <Select onValueChange={(value) => { setAcademicTerm(value); setSelectedSemester(''); }} value={academicTerm}>
                 <SelectTrigger>
@@ -440,7 +438,7 @@ const Sheets = () => {
               </Select>
             </div>
             {academicTerm && (
-              <div>
+              <div className="flex-grow" style={{ minWidth: '150px' }}>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Semester</label>
                 <Select onValueChange={setSelectedSemester} value={selectedSemester}>
                   <SelectTrigger>
@@ -454,11 +452,10 @@ const Sheets = () => {
                 </Select>
               </div>
             )}
-          </div>
-          
-          <div className="pt-2">
-            <Button onClick={() => fileInputRef.current?.click()} disabled={!selectedDepartment || !selectedSubject || !academicTerm || !selectedSemester}>Add Sheet</Button>
-            <input type="file" ref={fileInputRef} onChange={handleFileSelect} className="hidden" accept=".xlsx" />
+            <div>
+              <Button onClick={() => fileInputRef.current?.click()} disabled={!selectedDepartment || !selectedSubject || !academicTerm || !selectedSemester}>Add Sheet</Button>
+              <input type="file" ref={fileInputRef} onChange={handleFileSelect} className="hidden" accept=".xlsx" />
+            </div>
           </div>
         </CardContent>
       </Card>
