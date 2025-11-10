@@ -5,7 +5,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { showError, showSuccess, showLoading, dismissToast } from '@/utils/toast';
-import { Eye, Trash2, Download, Edit } from 'lucide-react';
+import { Eye, Trash2, Download, Edit3, MoreHorizontal, Calendar, CheckSquare, Hash } from 'lucide-react';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -16,10 +16,19 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import SheetViewerDialog from '@/components/SheetViewerDialog';
 import { SheetUploadPreviewDialog } from '@/components/SheetUploadPreviewDialog';
 import EditSheetForm from '@/components/EditSheetForm';
+import EditableSheetViewerDialog from '@/components/EditableSheetViewerDialog';
+import StaffSheetViewerDialog from '@/components/StaffSheetViewerDialog';
 import * as XLSX from 'xlsx';
 
 interface Department {
@@ -59,8 +68,15 @@ const Sheets = () => {
   const [loadingDepartments, setLoadingDepartments] = useState(true);
   const [loadingSubjects, setLoadingSubjects] = useState(false);
   const [loadingSheets, setLoadingSheets] = useState(false);
+  
   const [sheetToDelete, setSheetToDelete] = useState<Sheet | null>(null);
-  const [sheetToEdit, setSheetToEdit] = useState<Sheet | null>(null);
+  const [sheetToAssignDate, setSheetToAssignDate] = useState<Sheet | null>(null);
+  const [sheetToEditAttendance, setSheetToEditAttendance] = useState<Sheet | null>(null);
+  const [sheetToUpdateDuplicates, setSheetToUpdateDuplicates] = useState<Sheet | null>(null);
+  const [sheetToUpdateMarks, setSheetToUpdateMarks] = useState<Sheet | null>(null);
+  
+  const [sheetDataForDialog, setSheetDataForDialog] = useState<Record<string, any>[]>([]);
+  const [isDialogLoading, setIsDialogLoading] = useState(false);
   
   const [isViewerOpen, setIsViewerOpen] = useState(false);
   const [currentSheet, setCurrentSheet] = useState<Sheet | null>(null);
@@ -384,6 +400,35 @@ const Sheets = () => {
     }
   };
 
+  const loadSheetDataAndOpenDialog = async (sheet: Sheet, dialogType: 'attendance' | 'duplicates') => {
+    setIsDialogLoading(true);
+    const toastId = showLoading(`Loading sheet data...`);
+    try {
+        const { data, error } = await supabase.storage.from('sheets').download(sheet.file_path);
+        if (error) throw error;
+
+        const arrayBuffer = await data.arrayBuffer();
+        const workbook = XLSX.read(arrayBuffer, { type: 'array' });
+        const sheetName = workbook.SheetNames[0];
+        if (!sheetName) throw new Error("No sheet found in file.");
+        const worksheet = workbook.Sheets[sheetName];
+        const json = XLSX.utils.sheet_to_json(worksheet);
+        
+        setSheetDataForDialog(json);
+        if (dialogType === 'attendance') {
+            setSheetToEditAttendance(sheet);
+        } else if (dialogType === 'duplicates') {
+            setSheetToUpdateDuplicates(sheet);
+        }
+        dismissToast(toastId);
+    } catch (err: any) {
+        dismissToast(toastId);
+        showError(err.message || 'Failed to load sheet data.');
+    } finally {
+        setIsDialogLoading(false);
+    }
+  };
+
   const semesterOptions = academicTerm.includes('Odd')
     ? ["Sem 1", "Sem 3", "Sem 5", "Sem 7"]
     : ["Sem 2", "Sem 4", "Sem 6", "Sem 8"];
@@ -488,19 +533,47 @@ const Sheets = () => {
                           <TableCell>{sheet.year || 'N/A'}</TableCell>
                           <TableCell>{sheet.batch || 'N/A'}</TableCell>
                           <TableCell>{new Date(sheet.created_at).toLocaleString()}</TableCell>
-                          <TableCell className="text-right space-x-2">
-                            <Button variant="ghost" size="icon" onClick={() => handleDownloadSheet(sheet)}>
-                              <Download className="h-4 w-4" />
-                            </Button>
-                            <Button variant="ghost" size="icon" onClick={() => handleViewSheet(sheet)}>
-                              <Eye className="h-4 w-4" />
-                            </Button>
-                            <Button variant="ghost" size="icon" onClick={() => setSheetToEdit(sheet)}>
-                              <Edit className="h-4 w-4" />
-                            </Button>
-                            <Button variant="ghost" size="icon" onClick={() => setSheetToDelete(sheet)}>
-                              <Trash2 className="h-4 w-4 text-red-600" />
-                            </Button>
+                          <TableCell className="text-right">
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" className="h-8 w-8 p-0">
+                                  <span className="sr-only">Open menu</span>
+                                  <MoreHorizontal className="h-4 w-4" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
+                                <DropdownMenuItem onClick={() => handleViewSheet(sheet)}>
+                                  <Eye className="mr-2 h-4 w-4" />
+                                  <span>View Sheet</span>
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => handleDownloadSheet(sheet)}>
+                                  <Download className="mr-2 h-4 w-4" />
+                                  <span>Download</span>
+                                </DropdownMenuItem>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem onClick={() => setSheetToAssignDate(sheet)}>
+                                  <Calendar className="mr-2 h-4 w-4" />
+                                  <span>Assign Date</span>
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => loadSheetDataAndOpenDialog(sheet, 'attendance')}>
+                                  <CheckSquare className="mr-2 h-4 w-4" />
+                                  <span>Edit Attendance</span>
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => loadSheetDataAndOpenDialog(sheet, 'duplicates')}>
+                                  <Hash className="mr-2 h-4 w-4" />
+                                  <span>Update Duplicates</span>
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => setSheetToUpdateMarks(sheet)}>
+                                  <Edit3 className="mr-2 h-4 w-4" />
+                                  <span>Update Marks</span>
+                                </DropdownMenuItem>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem onClick={() => setSheetToDelete(sheet)} className="text-red-600 hover:!text-red-600 focus:text-red-600">
+                                  <Trash2 className="mr-2 h-4 w-4" />
+                                  <span>Delete</span>
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
                           </TableCell>
                         </TableRow>
                       ))
@@ -528,12 +601,44 @@ const Sheets = () => {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-      <Dialog open={!!sheetToEdit} onOpenChange={(isOpen) => !isOpen && setSheetToEdit(null)}>
+      
+      <Dialog open={!!sheetToAssignDate} onOpenChange={(isOpen) => !isOpen && setSheetToAssignDate(null)}>
         <DialogContent>
-          <DialogHeader><DialogTitle>Edit Sheet Dates</DialogTitle></DialogHeader>
-          {sheetToEdit && <EditSheetForm sheet={sheetToEdit} onSuccess={() => { setSheetToEdit(null); fetchSheets(); }} />}
+            <DialogHeader><DialogTitle>Assign Sheet Dates</DialogTitle></DialogHeader>
+            {sheetToAssignDate && <EditSheetForm sheet={sheetToAssignDate} onSuccess={() => { setSheetToAssignDate(null); fetchSheets(); }} />}
         </DialogContent>
       </Dialog>
+
+      <EditableSheetViewerDialog
+          isOpen={!!sheetToEditAttendance}
+          onClose={(didSave) => {
+              setSheetToEditAttendance(null);
+              if (didSave) fetchSheets();
+          }}
+          sheet={sheetToEditAttendance}
+          sheetData={sheetDataForDialog}
+      />
+
+      <SheetViewerDialog
+          isOpen={!!sheetToUpdateDuplicates}
+          onClose={() => {
+            setSheetToUpdateDuplicates(null);
+            fetchSheets();
+          }}
+          sheet={sheetToUpdateDuplicates}
+          sheetData={sheetDataForDialog}
+          showDuplicateGenerator={true}
+      />
+
+      <StaffSheetViewerDialog
+          isOpen={!!sheetToUpdateMarks}
+          onClose={(didSave) => {
+              setSheetToUpdateMarks(null);
+              if (didSave) fetchSheets();
+          }}
+          sheet={sheetToUpdateMarks}
+      />
+
       <SheetViewerDialog
         isOpen={isViewerOpen}
         onClose={() => setIsViewerOpen(false)}
