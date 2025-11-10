@@ -34,9 +34,10 @@ interface StaffSheetViewerDialogProps {
   onClose: (didSave: boolean) => void;
   sheet: Sheet | null;
   sheetData: Record<string, any>[];
+  fullSheetData: Record<string, any>[];
 }
 
-const StaffSheetViewerDialog = ({ isOpen, onClose, sheet, sheetData }: StaffSheetViewerDialogProps) => {
+const StaffSheetViewerDialog = ({ isOpen, onClose, sheet, sheetData, fullSheetData }: StaffSheetViewerDialogProps) => {
   const [editedData, setEditedData] = useState<Record<string, any>[]>([]);
   const [isSaving, setIsSaving] = useState(false);
   const [duplicateNumberKey, setDuplicateNumberKey] = useState<string | null>(null);
@@ -50,15 +51,9 @@ const StaffSheetViewerDialog = ({ isOpen, onClose, sheet, sheetData }: StaffShee
       setHasSaved(false);
 
       if (sheetData.length > 0) {
+        setEditedData(JSON.parse(JSON.stringify(sheetData)));
+        
         const firstRowKeys = Object.keys(sheetData[0]);
-        const attendanceKey = firstRowKeys.find(k => k.toLowerCase() === 'attendance');
-        
-        const presentStudents = attendanceKey
-          ? sheetData.filter(row => String(row[attendanceKey]).trim().toLowerCase() === 'present')
-          : sheetData;
-
-        setEditedData(JSON.parse(JSON.stringify(presentStudents)));
-        
         const dupKey = firstRowKeys.find(k => k.toLowerCase().replace(/\s/g, '') === 'duplicatenumber') || null;
         const extKey = firstRowKeys.find(k => k.toLowerCase().replace(/\s/g, '') === 'externalmark') || null;
         setDuplicateNumberKey(dupKey);
@@ -93,7 +88,7 @@ const StaffSheetViewerDialog = ({ isOpen, onClose, sheet, sheetData }: StaffShee
     const toastId = showLoading("Saving external marks...");
 
     try {
-      const originalSheetData = [...sheetData];
+      const originalSheetData = [...fullSheetData];
       const editedMarksMap = new Map(editedData.map(row => [row[duplicateNumberKey], row[externalMarkKey]]));
 
       const updatedSheetData = originalSheetData.map(row => {
@@ -157,7 +152,7 @@ const StaffSheetViewerDialog = ({ isOpen, onClose, sheet, sheetData }: StaffShee
         <DialogContent>
           <DialogHeader><DialogTitle>{sheet.sheet_name}</DialogTitle></DialogHeader>
           <p className="py-8 text-center text-muted-foreground">
-            This sheet is empty or does not contain 'duplicate number' and 'external mark' columns.
+            This bundle is empty or the sheet does not contain 'duplicate number' and 'external mark' columns.
           </p>
         </DialogContent>
       </Dialog>

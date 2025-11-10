@@ -3,12 +3,10 @@ import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { showError, showSuccess, showLoading, dismissToast } from '@/utils/toast';
-import { Eye, Download } from 'lucide-react';
 import StaffSheetViewerDialog from '@/components/StaffSheetViewerDialog';
 import * as XLSX from 'xlsx';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { Label } from '@/components/ui/label';
 
 interface Department {
   id: string;
@@ -29,51 +27,57 @@ interface Sheet {
   start_date?: string | null;
   end_date?: string | null;
   external_marks_added: boolean;
+  subjects: {
+    subject_code: string;
+  } | null;
 }
 
 const StaffSheets = () => {
   const [departments, setDepartments] = useState<Department[]>([]);
   const [subjects, setSubjects] = useState<Subject[]>([]);
-  const [sheets, setSheets] = useState<Sheet[]>([]);
+  const [academicTermOptions, setAcademicTermOptions] = useState<string[]>([]);
+  const [bundleOptions, setBundleOptions] = useState<string[]>([]);
   
   const [selectedDepartment, setSelectedDepartment] = useState<string>('');
   const [selectedSubject, setSelectedSubject] = useState<string>('');
+  const [academicTerm, setAcademicTerm] = useState<string>('');
+  const [selectedSemester, setSelectedSemester] = useState<string>('');
+  const [selectedBundle, setSelectedBundle] = useState<string>('');
   
-  const [loadingDepartments, setLoadingDepartments] = useState(true);
-  const [loadingSubjects, setLoadingSubjects] = useState(false);
-  const [loadingSheets, setLoadingSheets] = useState(false);
+  const [loading, setLoading] = useState({
+    departments: true,
+    subjects: false,
+    sheet: false,
+    bundles: false,
+  });
+
+  const [activeSheet, setActiveSheet] = useState<Sheet | null>(null);
+  const [fullSheetData, setFullSheetData] = useState<Record<string, any>[]>([]);
   
   const [isViewerOpen, setIsViewerOpen] = useState(false);
-  const [currentSheet, setCurrentSheet] = useState<Sheet | null>(null);
-  const [currentSheetData, setCurrentSheetData] = useState<Record<string, any>[]>([]);
-
-  const fetchSheets = useCallback(async () => {
-    if (!selectedSubject) return;
-    setLoadingSheets(true);
-    const { data, error } = await supabase
-      .from('sheets')
-      .select('*, external_marks_added')
-      .eq('subject_id', selectedSubject)
-      .order('created_at', { ascending: false });
-    
-    if (error) {
-      showError('Failed to fetch sheets.');
-    } else {
-      setSheets(data);
-    }
-    setLoadingSheets(false);
-  }, [selectedSubject]);
+  const [bundleDataForViewer, setBundleDataForViewer] = useState<Record<string, any>[]>([]);
 
   useEffect(() => {
+    const generateAcademicTerms = () => {
+      const terms = [];
+      const currentYear = new Date().getFullYear();
+      for (let year = currentYear; year >= 2020; year--) {
+        terms.push(`${year} Odd Sem`);
+        terms.push(`${year} Even Sem`);
+      }
+      setAcademicTermOptions(terms);
+    };
+    generateAcademicTerms();
+
     const fetchDepartments = async () => {
-      setLoadingDepartments(true);
+      setLoading(prev => ({ ...prev, departments: true }));
       const { data, error } = await supabase.from('departments').select('id, department_name');
       if (error) {
         showError('Failed to fetch departments.');
       } else {
         setDepartments(data);
       }
-      setLoadingDepartments(false);
+      setLoading(prev => ({ ...prev, departments: false }));
     };
     fetchDepartments();
   }, []);
@@ -84,144 +88,168 @@ const StaffSheets = () => {
       setSelectedSubject('');
       return;
     }
-
     const fetchSubjects = async () => {
-      setLoadingSubjects(true);
+      setLoading(prev => ({ ...prev, subjects: true }));
       setSelectedSubject('');
-      setSheets([]);
-      
       const { data, error } = await supabase
         .from('subjects')
         .select('id, subject_name, subject_code')
         .or(`department_id.eq.${selectedDepartment},department_id.is.null`);
-
       if (error) {
         showError('Failed to fetch subjects.');
       } else {
         setSubjects(data as Subject[]);
       }
-      setLoadingSubjects(false);
+      setLoading(prev => ({ ...prev, subjects: false }));
     };
-
     fetchSubjects();
   }, [selectedDepartment]);
 
   useEffect(() => {
-    fetchSheets();
-  }, [fetchSheets]);
+    const findSheetAndPrepareBundles = async () => {
+      setActiveSheet(null);
+      setFullSheetData([]);
+      setBundleOptions([]);
+      setSelectedBundle('');
 
-  const checkDateAvailability = (sheet: Sheet) => {
-    const now = new Date();
-    const startDate = sheet.start_date ? new Date(sheet.start_date) : null;
-    const endDate = sheet.end_date ? new Date(sheet.end_date) : null;
+      if (!selectedDepartment || !selectedSubject || !academicTerm || !selectedSemester) {
+        return;
+      }
 
-    if (startDate && now < startDate) {
-      showError(`This sheet is not available until ${startDate.toLocaleString()}.`);
-      return false;
-    }
-    if (endDate) {
-      endDate.setHours(23, 59, 59, 999);
-    }
-    if (endDate && now > endDate) {
-      showError(`This sheet is no longer available after ${endDate.toLocaleString()}.`);
-      return false;
-    }
-    return true;
-  };
+      setLoading(prev => ({ ...prev, sheet: true, bundles: true }));
+      const toastId = showLoading('Finding matching sheet...');
 
-  const handleViewSheet = async (sheet: Sheet) => {
-    if (!checkDateAvailability(sheet)) return;
+      try {
+        const { data: sheetData, error } = await supabase
+          .from('sheets')
+          .select('*, subjects(subject_code)')
+          .eq('department_id', selectedDepartment)
+          .eq('subject_id', selectedSubject)
+          .eq('year', academicTerm)
+          .eq('batch', selectedSemester)
+          .maybeSingle();
 
-    const toastId = showLoading(`Loading ${sheet.sheet_name}...`);
-    try {
-      const { data, error } = await supabase.storage
-        .from('sheets')
-        .download(sheet.file_path);
-
-      if (error) throw error;
-
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        try {
-          const arrayBuffer = e.target?.result;
-          const workbook = XLSX.read(arrayBuffer, { type: 'array' });
-          const sheetName = workbook.SheetNames[0];
-          if (!sheetName) throw new Error("No sheet found in the file.");
-          const worksheet = workbook.Sheets[sheetName];
-          const json = XLSX.utils.sheet_to_json(worksheet);
-          
-          setCurrentSheetData(json);
-          setCurrentSheet(sheet);
-          setIsViewerOpen(true);
-          dismissToast(toastId);
-        } catch (parseError: any) {
-          dismissToast(toastId);
-          showError(`Failed to parse sheet: ${parseError.message}`);
+        if (error) throw error;
+        if (!sheetData) {
+          throw new Error('No sheet found for the selected criteria. Please check your selections.');
         }
-      };
-      reader.onerror = () => {
+        
+        const foundSheet = sheetData as Sheet;
+        setActiveSheet(foundSheet);
+
         dismissToast(toastId);
-        showError('Failed to read the downloaded file.');
-      };
-      reader.readAsArrayBuffer(data);
+        const downloadToastId = showLoading('Loading sheet data...');
 
-    } catch (error: any) {
-      dismissToast(toastId);
-      showError(error.message || 'Failed to download sheet.');
+        const { data: fileData, error: downloadError } = await supabase.storage
+          .from('sheets')
+          .download(foundSheet.file_path);
+        
+        if (downloadError) throw downloadError;
+
+        const workbook = XLSX.read(await fileData.arrayBuffer(), { type: 'array' });
+        const sheetName = workbook.SheetNames[0];
+        if (!sheetName) throw new Error("No sheet found in the file.");
+        const worksheet = workbook.Sheets[sheetName];
+        const jsonData: Record<string, any>[] = XLSX.utils.sheet_to_json(worksheet);
+        setFullSheetData(jsonData);
+
+        if (jsonData.length > 0) {
+            const firstRowKeys = Object.keys(jsonData[0]);
+            const attendanceKey = firstRowKeys.find(k => k.toLowerCase() === 'attendance');
+            const duplicateNumberKey = firstRowKeys.find(k => k.toLowerCase().replace(/\s/g, '') === 'duplicatenumber');
+            const subjectCode = foundSheet.subjects?.subject_code;
+
+            if (!duplicateNumberKey || !subjectCode) {
+                throw new Error("Sheet is missing 'duplicate number' column or subject code is unavailable.");
+            }
+
+            const presentStudents = (attendanceKey 
+                ? jsonData.filter(row => String(row[attendanceKey]).trim().toLowerCase() === 'present')
+                : jsonData
+            ).sort((a, b) => (Number(a[duplicateNumberKey]) || 0) - (Number(b[duplicateNumberKey]) || 0));
+
+            const subjectCodePrefix = subjectCode.slice(0, 6);
+            const bundles = new Set<string>();
+            presentStudents.forEach((_, index) => {
+                const bundleName = `${subjectCodePrefix}-${String(Math.floor(index / 20) + 1).padStart(2, '0')}`;
+                bundles.add(bundleName);
+            });
+            setBundleOptions(Array.from(bundles));
+        }
+
+        dismissToast(downloadToastId);
+      } catch (err: any) {
+        dismissToast(toastId);
+        showError(err.message || 'An error occurred.');
+        setActiveSheet(null);
+        setFullSheetData([]);
+        setBundleOptions([]);
+        setSelectedBundle('');
+      } finally {
+        setLoading(prev => ({ ...prev, sheet: false, bundles: false }));
+      }
+    };
+
+    findSheetAndPrepareBundles();
+  }, [selectedDepartment, selectedSubject, academicTerm, selectedSemester]);
+
+  const handleEditMarks = () => {
+    if (!selectedBundle || !activeSheet || fullSheetData.length === 0) return;
+
+    const firstRowKeys = Object.keys(fullSheetData[0]);
+    const attendanceKey = firstRowKeys.find(k => k.toLowerCase() === 'attendance');
+    const duplicateNumberKey = firstRowKeys.find(k => k.toLowerCase().replace(/\s/g, '') === 'duplicatenumber');
+    const subjectCode = activeSheet.subjects?.subject_code;
+
+    if (!duplicateNumberKey || !subjectCode) {
+        showError("Cannot determine bundle data. Sheet is missing required columns.");
+        return;
     }
-  };
 
-  const handleDownloadSheet = async (sheet: Sheet) => {
-    if (!checkDateAvailability(sheet)) return;
+    const presentStudents = (attendanceKey 
+        ? fullSheetData.filter(row => String(row[attendanceKey]).trim().toLowerCase() === 'present')
+        : fullSheetData
+    ).sort((a, b) => (Number(a[duplicateNumberKey]) || 0) - (Number(b[duplicateNumberKey]) || 0));
 
-    const toastId = showLoading(`Preparing ${sheet.sheet_name} for download...`);
-    try {
-      const { data, error } = await supabase.storage
-        .from('sheets')
-        .download(sheet.file_path);
+    const subjectCodePrefix = subjectCode.slice(0, 6);
+    const bundleStudents = presentStudents.filter((_, index) => {
+        const bundleName = `${subjectCodePrefix}-${String(Math.floor(index / 20) + 1).padStart(2, '0')}`;
+        return bundleName === selectedBundle;
+    });
 
-      if (error) throw error;
-
-      const url = window.URL.createObjectURL(data);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = sheet.sheet_name;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      window.URL.revokeObjectURL(url);
-
-      dismissToast(toastId);
-      showSuccess('Download started.');
-
-    } catch (error: any) {
-      dismissToast(toastId);
-      showError(error.message || 'Failed to download sheet.');
-    }
+    setBundleDataForViewer(bundleStudents);
+    setIsViewerOpen(true);
   };
 
   const handleViewerClose = (didSave: boolean) => {
     setIsViewerOpen(false);
     if (didSave) {
-      fetchSheets();
+      setSelectedBundle('');
+      setBundleOptions([]);
+      setActiveSheet(null);
+      setSelectedSemester('');
     }
   };
 
+  const semesterOptions = academicTerm.includes('Odd')
+    ? ["Sem 1", "Sem 3", "Sem 5", "Sem 7"]
+    : ["Sem 2", "Sem 4", "Sem 6", "Sem 8"];
+
   return (
     <div className="space-y-6">
-      <h1 className="text-3xl font-bold">View & Edit Sheets</h1>
+      <h1 className="text-3xl font-bold">Update External Marks</h1>
       
       <Card>
         <CardHeader>
-          <CardTitle>Select Department and Subject</CardTitle>
+          <CardTitle>Select Sheet and Bundle</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Department</label>
-              <Select onValueChange={setSelectedDepartment} value={selectedDepartment} disabled={loadingDepartments}>
+              <Label>Department</Label>
+              <Select onValueChange={setSelectedDepartment} value={selectedDepartment} disabled={loading.departments}>
                 <SelectTrigger>
-                  <SelectValue placeholder={loadingDepartments ? "Loading..." : "Select a department"} />
+                  <SelectValue placeholder={loading.departments ? "Loading..." : "Select department"} />
                 </SelectTrigger>
                 <SelectContent>
                   {departments.map(dept => (
@@ -231,10 +259,36 @@ const StaffSheets = () => {
               </Select>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Subject</label>
-              <Select onValueChange={setSelectedSubject} value={selectedSubject} disabled={!selectedDepartment || loadingSubjects}>
+              <Label>Academic Term</Label>
+              <Select onValueChange={(value) => { setAcademicTerm(value); setSelectedSemester(''); }} value={academicTerm}>
                 <SelectTrigger>
-                  <SelectValue placeholder={loadingSubjects ? "Loading..." : "Select a subject"} />
+                  <SelectValue placeholder="Select term" />
+                </SelectTrigger>
+                <SelectContent>
+                  {academicTermOptions.map(term => (
+                    <SelectItem key={term} value={term}>{term}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>Semester</Label>
+              <Select onValueChange={setSelectedSemester} value={selectedSemester} disabled={!academicTerm}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select semester" />
+                </SelectTrigger>
+                <SelectContent>
+                  {semesterOptions.map(sem => (
+                    <SelectItem key={sem} value={sem}>{sem}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>Subject</Label>
+              <Select onValueChange={setSelectedSubject} value={selectedSubject} disabled={!selectedDepartment || loading.subjects}>
+                <SelectTrigger>
+                  <SelectValue placeholder={loading.subjects ? "Loading..." : "Select subject"} />
                 </SelectTrigger>
                 <SelectContent>
                   {subjects.map(sub => (
@@ -243,70 +297,34 @@ const StaffSheets = () => {
                 </SelectContent>
               </Select>
             </div>
+            <div>
+              <Label>Bundle Number</Label>
+              <Select onValueChange={setSelectedBundle} value={selectedBundle} disabled={!activeSheet || loading.bundles}>
+                <SelectTrigger>
+                  <SelectValue placeholder={loading.bundles ? "Loading..." : "Select bundle"} />
+                </SelectTrigger>
+                <SelectContent>
+                  {bundleOptions.map(bundle => (
+                    <SelectItem key={bundle} value={bundle}>{bundle}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <div className="flex justify-end pt-4">
+            <Button onClick={handleEditMarks} disabled={!selectedBundle || !!activeSheet?.external_marks_added}>
+              {activeSheet?.external_marks_added ? 'Marks Already Added' : 'Edit Marks'}
+            </Button>
           </div>
         </CardContent>
       </Card>
 
-      {selectedSubject && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Available Sheets</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {loadingSheets ? <p>Loading sheets...</p> : (
-              <div className="border rounded-lg">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Sheet Name</TableHead>
-                      <TableHead>Uploaded At</TableHead>
-                      <TableHead className="text-right">Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {sheets.length > 0 ? sheets.map(sheet => (
-                      <TableRow key={sheet.id}>
-                        <TableCell className="font-medium">{sheet.sheet_name}</TableCell>
-                        <TableCell>{new Date(sheet.created_at).toLocaleString()}</TableCell>
-                        <TableCell className="text-right space-x-2">
-                           <Button variant="ghost" size="icon" onClick={() => handleDownloadSheet(sheet)}>
-                            <Download className="h-4 w-4" />
-                          </Button>
-                          <TooltipProvider>
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <span tabIndex={0}>
-                                  <Button variant="ghost" size="icon" onClick={() => handleViewSheet(sheet)} disabled={sheet.external_marks_added}>
-                                    <Eye className="h-4 w-4" />
-                                  </Button>
-                                </span>
-                              </TooltipTrigger>
-                              {sheet.external_marks_added && (
-                                <TooltipContent>
-                                  <p>External marks already added and cannot be edited.</p>
-                                </TooltipContent>
-                              )}
-                            </Tooltip>
-                          </TooltipProvider>
-                        </TableCell>
-                      </TableRow>
-                    )) : (
-                      <TableRow>
-                        <TableCell colSpan={3} className="text-center">No sheets found for this subject.</TableCell>
-                      </TableRow>
-                    )}
-                  </TableBody>
-                </Table>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      )}
       <StaffSheetViewerDialog
         isOpen={isViewerOpen}
         onClose={handleViewerClose}
-        sheet={currentSheet}
-        sheetData={currentSheetData}
+        sheet={activeSheet}
+        sheetData={bundleDataForViewer}
+        fullSheetData={fullSheetData}
       />
     </div>
   );
