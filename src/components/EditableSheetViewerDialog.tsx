@@ -22,6 +22,7 @@ import {
 } from "@/components/ui/select";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { showLoading, dismissToast, showSuccess, showError } from "@/utils/toast";
@@ -153,15 +154,18 @@ const EditableSheetViewerDialog = ({ isOpen, onClose, sheet, sheetData }: Editab
         <DialogHeader><DialogTitle>{sheet.sheet_name}</DialogTitle></DialogHeader>
         
         <div className="flex justify-end gap-2 mb-4">
-          <Select onValueChange={handleBulkAttendance} value="bulk" disabled={isReadOnly || isSaving}>
-            <SelectTrigger className="w-[200px]">
-              <SelectValue placeholder="Bulk Mark Unmarked" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="Present">Mark All Unmarked Present</SelectItem>
-              <SelectItem value="Absent">Mark All Unmarked Absent</SelectItem>
-            </SelectContent>
-          </Select>
+          <div className="flex items-center gap-2">
+            <Label htmlFor="bulk-attendance-select" className="text-sm font-medium text-gray-700">Bulk Action:</Label>
+            <Select onValueChange={handleBulkAttendance} value="bulk" disabled={isReadOnly || isSaving}>
+              <SelectTrigger id="bulk-attendance-select" className="w-[200px]">
+                <SelectValue placeholder="Bulk Mark Unmarked" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="Present">Mark All Unmarked Present</SelectItem>
+                <SelectItem value="Absent">Mark All Unmarked Absent</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
         </div>
 
         <div className="flex-grow overflow-hidden min-h-0">
