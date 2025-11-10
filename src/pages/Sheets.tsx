@@ -1,7 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -42,19 +41,8 @@ export interface Sheet {
   start_date?: string | null;
   end_date?: string | null;
   year?: string | null;
+  batch?: string | null;
 }
-
-const getCurrentAcademicYear = () => {
-  const now = new Date();
-  const year = now.getFullYear();
-  const month = now.getMonth(); // 0-11
-
-  if (month >= 5) { // June to December
-    return `${year}-${year + 1} Quarter 1`;
-  } else { // January to May
-    return `${year - 1}-${year} Quarter 2`;
-  }
-};
 
 const Sheets = () => {
   const [departments, setDepartments] = useState<Department[]>([]);
@@ -64,7 +52,9 @@ const Sheets = () => {
   const [selectedDepartment, setSelectedDepartment] = useState<string>('');
   const [selectedSubject, setSelectedSubject] = useState<string>('');
   
-  const [academicYear, setAcademicYear] = useState('');
+  const [academicTerm, setAcademicTerm] = useState<string>('');
+  const [selectedSemester, setSelectedSemester] = useState<string>('');
+  const [academicTermOptions, setAcademicTermOptions] = useState<string[]>([]);
 
   const [loadingDepartments, setLoadingDepartments] = useState(true);
   const [loadingSubjects, setLoadingSubjects] = useState(false);
@@ -105,7 +95,20 @@ const Sheets = () => {
   }, [selectedSubject]);
 
   useEffect(() => {
-    setAcademicYear(getCurrentAcademicYear());
+    const generateAcademicTerms = () => {
+      const terms = [];
+      const currentYear = new Date().getFullYear();
+      for (let year = currentYear; year >= 2020; year--) {
+        terms.push(`${year} Odd Sem`);
+        terms.push(`${year} Even Sem`);
+      }
+      setAcademicTermOptions(terms);
+
+      const currentMonth = new Date().getMonth(); // 0-11
+      const defaultTerm = currentMonth >= 5 ? `${currentYear} Odd Sem` : `${currentYear} Even Sem`;
+      setAcademicTerm(defaultTerm);
+    };
+    generateAcademicTerms();
 
     const fetchDepartments = async () => {
       setLoadingDepartments(true);
@@ -271,7 +274,8 @@ const Sheets = () => {
             file_path: filePath,
             department_id: selectedDepartment,
             subject_id: selectedSubject,
-            year: academicYear,
+            year: academicTerm,
+            batch: selectedSemester,
         });
         if (insertError) throw insertError;
 
@@ -380,6 +384,10 @@ const Sheets = () => {
     }
   };
 
+  const semesterOptions = academicTerm.includes('Odd')
+    ? ["Sem 1", "Sem 3", "Sem 5", "Sem 7"]
+    : ["Sem 2", "Sem 4", "Sem 6", "Sem 8"];
+
   return (
     <div className="space-y-6">
       <h1 className="text-3xl font-bold">Sheets</h1>
@@ -419,13 +427,37 @@ const Sheets = () => {
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Academic Year</label>
-              <Input value={academicYear} disabled />
+              <label className="block text-sm font-medium text-gray-700 mb-1">Academic Term</label>
+              <Select onValueChange={(value) => { setAcademicTerm(value); setSelectedSemester(''); }} value={academicTerm}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select an academic term" />
+                </SelectTrigger>
+                <SelectContent className="max-h-60">
+                  {academicTermOptions.map(term => (
+                    <SelectItem key={term} value={term}>{term}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
+            {academicTerm && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Semester</label>
+                <Select onValueChange={setSelectedSemester} value={selectedSemester}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select a semester" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {semesterOptions.map(sem => (
+                      <SelectItem key={sem} value={sem}>{sem}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
           </div>
           
           <div className="pt-2">
-            <Button onClick={() => fileInputRef.current?.click()} disabled={!selectedDepartment || !selectedSubject}>Add Sheet</Button>
+            <Button onClick={() => fileInputRef.current?.click()} disabled={!selectedDepartment || !selectedSubject || !academicTerm || !selectedSemester}>Add Sheet</Button>
             <input type="file" ref={fileInputRef} onChange={handleFileSelect} className="hidden" accept=".xlsx" />
           </div>
         </CardContent>
@@ -445,7 +477,8 @@ const Sheets = () => {
                   <TableHeader>
                     <TableRow>
                       <TableHead>Sheet Name</TableHead>
-                      <TableHead>Year</TableHead>
+                      <TableHead>Academic Term</TableHead>
+                      <TableHead>Semester</TableHead>
                       <TableHead>Uploaded At</TableHead>
                       <TableHead className="text-right">Actions</TableHead>
                     </TableRow>
@@ -456,6 +489,7 @@ const Sheets = () => {
                         <TableRow key={sheet.id}>
                           <TableCell className="font-medium">{sheet.sheet_name}</TableCell>
                           <TableCell>{sheet.year || 'N/A'}</TableCell>
+                          <TableCell>{sheet.batch || 'N/A'}</TableCell>
                           <TableCell>{new Date(sheet.created_at).toLocaleString()}</TableCell>
                           <TableCell className="text-right space-x-2">
                             <Button variant="ghost" size="icon" onClick={() => handleDownloadSheet(sheet)}>
@@ -475,7 +509,7 @@ const Sheets = () => {
                       ))
                     ) : (
                       <TableRow>
-                        <TableCell colSpan={4} className="text-center">No sheets found for this subject.</TableCell>
+                        <TableCell colSpan={5} className="text-center">No sheets found for this subject.</TableCell>
                       </TableRow>
                     )}
                   </TableBody>

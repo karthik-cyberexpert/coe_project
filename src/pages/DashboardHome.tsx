@@ -19,6 +19,7 @@ interface SheetWithRelations {
   duplicates_generated: boolean;
   external_marks_added: boolean;
   year?: string | null;
+  batch?: string | null;
   departments: {
     degree: string;
     department_name: string;
@@ -196,11 +197,11 @@ const DashboardHome = () => {
               </Select>
               <Select value={quarterFilter} onValueChange={setQuarterFilter}>
                 <SelectTrigger className="w-[180px]">
-                  <SelectValue placeholder="Filter by Quarter" />
+                  <SelectValue placeholder="Filter by Semester" />
                 </SelectTrigger>
                 <SelectContent>
                   {quarterOptions.map(quarter => (
-                    <SelectItem key={quarter} value={quarter}>{quarter === 'all' ? 'All Quarters' : quarter}</SelectItem>
+                    <SelectItem key={quarter} value={quarter}>{quarter === 'all' ? 'All Semesters' : quarter}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -217,7 +218,8 @@ const DashboardHome = () => {
                   <TableHead>Subject Name</TableHead>
                   <TableHead>Degree</TableHead>
                   <TableHead>Department</TableHead>
-                  <TableHead>Year</TableHead>
+                  <TableHead>Academic Term</TableHead>
+                  <TableHead>Semester</TableHead>
                   <TableHead>Status</TableHead>
                 </TableRow>
               </TableHeader>
@@ -230,11 +232,12 @@ const DashboardHome = () => {
                     <TableCell>{sheet.departments?.degree || 'N/A'}</TableCell>
                     <TableCell>{sheet.departments?.department_name || 'N/A'}</TableCell>
                     <TableCell>{sheet.year || 'N/A'}</TableCell>
+                    <TableCell>{sheet.batch || 'N/A'}</TableCell>
                     <TableCell>{profile && getStatus(sheet, profile)}</TableCell>
                   </TableRow>
                 )) : (
                   <TableRow>
-                    <TableCell colSpan={7} className="text-center">No sheets found for the selected filters.</TableCell>
+                    <TableCell colSpan={8} className="text-center">No sheets found for the selected filters.</TableCell>
                   </TableRow>
                 )}
               </TableBody>
@@ -246,7 +249,7 @@ const DashboardHome = () => {
       {profile?.is_admin || profile?.is_ceo ? (
         <SheetViewerDialog
             isOpen={isViewerOpen && !!viewingSheet}
-            onClose={handleCloseViewer}
+            onClose={() => handleCloseViewer(false)}
             sheet={viewingSheet}
             sheetData={sheetContent}
             showDuplicateGenerator={profile.is_ceo}
