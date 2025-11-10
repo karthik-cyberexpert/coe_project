@@ -73,11 +73,8 @@ const EditableSheetViewerDialog = ({ isOpen, onClose, sheet, sheetData }: Editab
     const status = value === 'Present' ? 'Present' : 'Absent';
 
     const newData = editedData.map(row => {
-      // Only update if the attendance is currently empty or null/undefined
-      if (!row[attendanceKey] || String(row[attendanceKey]).trim() === '') {
-        return { ...row, [attendanceKey]: status };
-      }
-      return row;
+      // Update all rows regardless of current status
+      return { ...row, [attendanceKey]: status };
     });
     setEditedData(newData);
   };
@@ -158,11 +155,11 @@ const EditableSheetViewerDialog = ({ isOpen, onClose, sheet, sheetData }: Editab
             <Label htmlFor="bulk-attendance-select" className="text-sm font-medium text-gray-700">Bulk Action:</Label>
             <Select onValueChange={handleBulkAttendance} value="bulk" disabled={isReadOnly || isSaving}>
               <SelectTrigger id="bulk-attendance-select" className="w-[200px]">
-                <SelectValue placeholder="Bulk Mark Unmarked" />
+                <SelectValue placeholder="Bulk Mark" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="Present">Mark All Unmarked Present</SelectItem>
-                <SelectItem value="Absent">Mark All Unmarked Absent</SelectItem>
+                <SelectItem value="Present">Mark All Present</SelectItem>
+                <SelectItem value="Absent">Mark All Absent</SelectItem>
               </SelectContent>
             </Select>
           </div>
