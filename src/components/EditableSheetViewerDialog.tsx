@@ -66,8 +66,11 @@ const EditableSheetViewerDialog = ({ isOpen, onClose, sheet, sheetData }: Editab
     setEditedData(newData);
   };
 
-  const handleBulkAttendance = (status: 'Present' | 'Absent') => {
-    if (!attendanceKey) return;
+  const handleBulkAttendance = (value: string) => {
+    if (!attendanceKey || value === 'bulk') return;
+    
+    const status = value === 'Present' ? 'Present' : 'Absent';
+
     const newData = editedData.map(row => {
       // Only update if the attendance is currently empty or null/undefined
       if (!row[attendanceKey] || String(row[attendanceKey]).trim() === '') {
@@ -150,20 +153,15 @@ const EditableSheetViewerDialog = ({ isOpen, onClose, sheet, sheetData }: Editab
         <DialogHeader><DialogTitle>{sheet.sheet_name}</DialogTitle></DialogHeader>
         
         <div className="flex justify-end gap-2 mb-4">
-          <Button 
-            variant="outline" 
-            onClick={() => handleBulkAttendance('Present')} 
-            disabled={isReadOnly || isSaving}
-          >
-            Mark All Unmarked Present
-          </Button>
-          <Button 
-            variant="outline" 
-            onClick={() => handleBulkAttendance('Absent')} 
-            disabled={isReadOnly || isSaving}
-          >
-            Mark All Unmarked Absent
-          </Button>
+          <Select onValueChange={handleBulkAttendance} value="bulk" disabled={isReadOnly || isSaving}>
+            <SelectTrigger className="w-[200px]">
+              <SelectValue placeholder="Bulk Mark Unmarked" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="Present">Mark All Unmarked Present</SelectItem>
+              <SelectItem value="Absent">Mark All Unmarked Absent</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
 
         <div className="flex-grow overflow-hidden min-h-0">
