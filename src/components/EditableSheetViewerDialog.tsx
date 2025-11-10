@@ -161,8 +161,8 @@ const EditableSheetViewerDialog = ({ isOpen, onClose, sheet, sheetData }: Editab
                 <SelectValue placeholder="Bulk Mark" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="Present">Mark All Present</SelectItem>
-                <SelectItem value="Absent">Mark All Absent</SelectItem>
+                <SelectItem value="Present">Present</SelectItem>
+                <SelectItem value="Absent">Absent</SelectItem>
               </SelectContent>
             </Select>
           </div>
