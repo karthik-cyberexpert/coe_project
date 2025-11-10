@@ -48,6 +48,7 @@ const EditableSheetViewerDialog = ({ isOpen, onClose, sheet, sheetData }: Editab
   const [isSaving, setIsSaving] = useState(false);
   const [attendanceKey, setAttendanceKey] = useState<string | null>(null);
   const [registerNumberKey, setRegisterNumberKey] = useState<string | null>(null);
+  const [bulkAction, setBulkAction] = useState<string | undefined>(undefined);
 
   useEffect(() => {
     if (isOpen && sheetData.length > 0) {
@@ -57,6 +58,7 @@ const EditableSheetViewerDialog = ({ isOpen, onClose, sheet, sheetData }: Editab
       const regKey = firstRowKeys.find(k => k.toLowerCase().replace(/\s/g, '') === 'registernumber') || null;
       setAttendanceKey(attKey);
       setRegisterNumberKey(regKey);
+      setBulkAction(undefined); // Reset dropdown on open
     }
   }, [isOpen, sheetData]);
 
@@ -68,8 +70,9 @@ const EditableSheetViewerDialog = ({ isOpen, onClose, sheet, sheetData }: Editab
   };
 
   const handleBulkAttendance = (value: string) => {
-    if (!attendanceKey || value === 'bulk') return;
+    if (!attendanceKey) return;
     
+    setBulkAction(value);
     const status = value === 'Present' ? 'Present' : 'Absent';
 
     const newData = editedData.map(row => {
@@ -153,7 +156,7 @@ const EditableSheetViewerDialog = ({ isOpen, onClose, sheet, sheetData }: Editab
         <div className="flex justify-end gap-2 mb-4">
           <div className="flex items-center gap-2">
             <Label htmlFor="bulk-attendance-select" className="text-sm font-medium text-gray-700">Bulk Action:</Label>
-            <Select onValueChange={handleBulkAttendance} value="bulk" disabled={isReadOnly || isSaving}>
+            <Select onValueChange={handleBulkAttendance} value={bulkAction} disabled={isReadOnly || isSaving}>
               <SelectTrigger id="bulk-attendance-select" className="w-[200px]">
                 <SelectValue placeholder="Bulk Mark" />
               </SelectTrigger>
