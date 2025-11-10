@@ -617,6 +617,7 @@ const Sheets = () => {
           }}
           sheet={sheetToEditAttendance}
           sheetData={sheetDataForDialog}
+          forceEditable={true}
       />
 
       <SheetViewerDialog
@@ -628,6 +629,7 @@ const Sheets = () => {
           sheet={sheetToUpdateDuplicates}
           sheetData={sheetDataForDialog}
           showDuplicateGenerator={true}
+          forceGenerate={true}
       />
 
       <StaffSheetViewerDialog
@@ -637,6 +639,7 @@ const Sheets = () => {
               if (didSave) fetchSheets();
           }}
           sheet={sheetToUpdateMarks}
+          forceEditable={true}
       />
 
       <SheetViewerDialog

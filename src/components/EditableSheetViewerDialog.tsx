@@ -41,9 +41,10 @@ interface EditableSheetViewerDialogProps {
   onClose: (didSave: boolean) => void;
   sheet: Sheet | null;
   sheetData: Record<string, any>[];
+  forceEditable?: boolean;
 }
 
-const EditableSheetViewerDialog = ({ isOpen, onClose, sheet, sheetData }: EditableSheetViewerDialogProps) => {
+const EditableSheetViewerDialog = ({ isOpen, onClose, sheet, sheetData, forceEditable = false }: EditableSheetViewerDialogProps) => {
   const [editedData, setEditedData] = useState<Record<string, any>[]>([]);
   const [isSaving, setIsSaving] = useState(false);
   const [attendanceKey, setAttendanceKey] = useState<string | null>(null);
@@ -133,7 +134,7 @@ const EditableSheetViewerDialog = ({ isOpen, onClose, sheet, sheetData }: Editab
 
   if (!sheet || !sheetData) return null;
   
-  const isReadOnly = sheet.attendance_marked;
+  const isReadOnly = sheet.attendance_marked && !forceEditable;
 
   if (sheetData.length === 0) {
     return (

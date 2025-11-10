@@ -44,9 +44,10 @@ interface StaffSheetViewerDialogProps {
   onClose: (didSave: boolean) => void;
   sheet: Sheet | null;
   sheetData?: Record<string, any>[];
+  forceEditable?: boolean;
 }
 
-const StaffSheetViewerDialog = ({ isOpen, onClose, sheet, sheetData }: StaffSheetViewerDialogProps) => {
+const StaffSheetViewerDialog = ({ isOpen, onClose, sheet, sheetData, forceEditable = false }: StaffSheetViewerDialogProps) => {
   const [fullSheetData, setFullSheetData] = useState<Record<string, any>[]>([]);
   const [bundleOptions, setBundleOptions] = useState<string[]>([]);
   const [selectedBundle, setSelectedBundle] = useState<string>('');
@@ -110,16 +111,18 @@ const StaffSheetViewerDialog = ({ isOpen, onClose, sheet, sheetData }: StaffShee
             setDuplicateNumberKey(dupKey);
             setExternalMarkKey(extKey);
 
-            const presentStudents = jsonData
-                .filter(row => row[dupKey] !== null && row[dupKey] !== undefined && String(row[dupKey]).trim() !== '')
-                .sort((a, b) => (Number(a[dupKey]) || 0) - (Number(b[dupKey]) || 0));
+            const studentsForBundling = jsonData
+                .filter(row => row[dupKey] !== null && row[dupKey] !== undefined && String(row[dupKey]).trim() !== '');
 
-            const subjectCodePrefix = subjectCode.slice(0, 6);
-            const bundles = new Set<string>();
-            presentStudents.forEach((_, index) => {
-                bundles.add(`${subjectCodePrefix}-${String(Math.floor(index / 20) + 1).padStart(2, '0')}`);
-            });
-            setBundleOptions(Array.from(bundles));
+            if (studentsForBundling.length > 0) {
+              const sortedStudents = studentsForBundling.sort((a, b) => (Number(a[dupKey]) || 0) - (Number(b[dupKey]) || 0));
+              const subjectCodePrefix = subjectCode.slice(0, 6);
+              const bundles = new Set<string>();
+              sortedStudents.forEach((_, index) => {
+                  bundles.add(`${subjectCodePrefix}-${String(Math.floor(index / 20) + 1).padStart(2, '0')}`);
+              });
+              setBundleOptions(Array.from(bundles));
+            }
             setView('marks');
         } else {
             setView('marks'); // Show empty state
@@ -163,14 +166,18 @@ const StaffSheetViewerDialog = ({ isOpen, onClose, sheet, sheetData }: StaffShee
 
         if (data) {
             setExaminerDetails(data);
-            setView('submitted');
+            if (!forceEditable) {
+              setView('submitted');
+            } else {
+              setView('marks'); // Admin can always edit
+            }
         } else {
             setExaminerDetails(null);
             setView('marks');
         }
     };
     checkBundleStatus();
-  }, [selectedBundle, sheet, fullSheetData, duplicateNumberKey]);
+  }, [selectedBundle, sheet, fullSheetData, duplicateNumberKey, forceEditable]);
 
   const handleMarkChange = (rowIndex: number, value: string) => {
     if (!externalMarkKey) return;
@@ -217,7 +224,9 @@ const StaffSheetViewerDialog = ({ isOpen, onClose, sheet, sheetData }: StaffShee
   const handleExaminerSuccess = (data: ExaminerDetails) => {
     setExaminerDetails(data);
     setIsExaminerFormOpen(false);
-    setView('submitted');
+    if (!forceEditable) {
+      setView('submitted');
+    }
   };
 
   const handleDownloadPdf = () => {
@@ -337,7 +346,7 @@ const StaffSheetViewerDialog = ({ isOpen, onClose, sheet, sheetData }: StaffShee
                 </ScrollArea>
               </div>
               <DialogFooter>
-                {view === 'submitted' ? (
+                {view === 'submitted' && !forceEditable ? (
                   <Button onClick={handleDownloadPdf}>Download PDF</Button>
                 ) : (
                   <Button onClick={handleSaveChanges} disabled={isSaving || editedData.length === 0}>

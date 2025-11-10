@@ -47,6 +47,7 @@ interface SheetViewerDialogProps {
   sheetData: Record<string, any>[];
   showDuplicateGenerator?: boolean;
   showBundleNumber?: boolean;
+  forceGenerate?: boolean;
 }
 
 const SheetViewerDialog = ({ 
@@ -56,6 +57,7 @@ const SheetViewerDialog = ({
   sheetData, 
   showDuplicateGenerator = false,
   showBundleNumber = false,
+  forceGenerate = false,
 }: SheetViewerDialogProps) => {
   const [displayData, setDisplayData] = useState<Record<string, any>[]>([]);
   const [startNumber, setStartNumber] = useState('');
@@ -258,6 +260,8 @@ const SheetViewerDialog = ({
     return allHeaders;
   })();
 
+  const canGenerate = !currentSheet.duplicates_generated || forceGenerate;
+
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="sm:max-w-[80vw] max-h-[90vh] flex flex-col">
@@ -321,14 +325,14 @@ const SheetViewerDialog = ({
                 value={startNumber}
                 onChange={(e) => setStartNumber(e.target.value)}
                 className="w-40"
-                disabled={isSaving || currentSheet.duplicates_generated}
+                disabled={isSaving || !canGenerate}
               />
               <TooltipProvider>
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <div className="inline-block">
-                      <Button onClick={handleGenerateAndSave} disabled={isSaving || !isAttendanceMarked || currentSheet.duplicates_generated}>
-                        {isSaving ? 'Saving...' : currentSheet.duplicates_generated ? 'Generated' : 'Generate & Save'}
+                      <Button onClick={handleGenerateAndSave} disabled={isSaving || !isAttendanceMarked || !canGenerate}>
+                        {isSaving ? 'Saving...' : canGenerate ? 'Generate & Save' : 'Generated'}
                       </Button>
                     </div>
                   </TooltipTrigger>
@@ -337,7 +341,7 @@ const SheetViewerDialog = ({
                       <p>Attendance must be marked before generating numbers.</p>
                     </TooltipContent>
                   )}
-                  {currentSheet.duplicates_generated && (
+                  {!canGenerate && (
                      <TooltipContent>
                       <p>Duplicate numbers have already been generated.</p>
                     </TooltipContent>
