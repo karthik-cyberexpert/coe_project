@@ -66,6 +66,18 @@ const EditableSheetViewerDialog = ({ isOpen, onClose, sheet, sheetData }: Editab
     setEditedData(newData);
   };
 
+  const handleBulkAttendance = (status: 'Present' | 'Absent') => {
+    if (!attendanceKey) return;
+    const newData = editedData.map(row => {
+      // Only update if the attendance is currently empty or null/undefined
+      if (!row[attendanceKey] || String(row[attendanceKey]).trim() === '') {
+        return { ...row, [attendanceKey]: status };
+      }
+      return row;
+    });
+    setEditedData(newData);
+  };
+
   const handleSaveChanges = async () => {
     if (!sheet || !attendanceKey) {
       showError("Sheet information is missing. Cannot save.");
@@ -136,6 +148,24 @@ const EditableSheetViewerDialog = ({ isOpen, onClose, sheet, sheetData }: Editab
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose(false)}>
       <DialogContent className="sm:max-w-[80vw] max-h-[90vh] flex flex-col">
         <DialogHeader><DialogTitle>{sheet.sheet_name}</DialogTitle></DialogHeader>
+        
+        <div className="flex justify-end gap-2 mb-4">
+          <Button 
+            variant="outline" 
+            onClick={() => handleBulkAttendance('Present')} 
+            disabled={isReadOnly || isSaving}
+          >
+            Mark All Unmarked Present
+          </Button>
+          <Button 
+            variant="outline" 
+            onClick={() => handleBulkAttendance('Absent')} 
+            disabled={isReadOnly || isSaving}
+          >
+            Mark All Unmarked Absent
+          </Button>
+        </div>
+
         <div className="flex-grow overflow-hidden min-h-0">
           <ScrollArea className="h-[60vh] w-full rounded-md border">
             <div className="w-max min-w-full">
