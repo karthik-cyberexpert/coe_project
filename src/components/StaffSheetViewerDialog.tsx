@@ -4,6 +4,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogFooter,
+  DialogDescription,
 } from "@/components/ui/dialog";
 import {
   Table,
@@ -25,7 +26,7 @@ import * as XLSX from 'xlsx';
 import { Sheet } from "@/pages/StaffSheets";
 import ExaminerDetailsDialog from "./ExaminerDetailsDialog";
 import jsPDF from 'jspdf';
-import 'jspdf-autotable';
+import autoTable from 'jspdf-autotable';
 import { numberToWords } from "@/utils/numberToWords";
 
 interface ExaminerDetails {
@@ -261,7 +262,7 @@ const StaffSheetViewerDialog = ({ isOpen, onClose, sheet, sheetData, forceEditab
         row[externalMarkKey],
         numberToWords(parseInt(row[externalMarkKey], 10) || 0)
     ]);
-    (doc as any).autoTable({
+    autoTable(doc, {
         startY: 70,
         head: [['Duplicate Number', 'External Mark', 'Mark in Words']],
         body: tableData,
@@ -305,7 +306,12 @@ const StaffSheetViewerDialog = ({ isOpen, onClose, sheet, sheetData, forceEditab
     <>
       <Dialog open={isOpen} onOpenChange={(open) => !open && onClose(view === 'submitted')}>
         <DialogContent className="sm:max-w-[600px] max-h-[90vh] flex flex-col">
-          <DialogHeader><DialogTitle>{sheet?.sheet_name || 'Update Marks'}</DialogTitle></DialogHeader>
+          <DialogHeader>
+            <DialogTitle>{sheet?.sheet_name || 'Update Marks'}</DialogTitle>
+            <DialogDescription>
+              Update external marks for the selected bundle. Finalize by providing examiner details.
+            </DialogDescription>
+          </DialogHeader>
           
           {loading ? <p className="text-center py-8">Loading...</p> : (
             <>
@@ -333,7 +339,7 @@ const StaffSheetViewerDialog = ({ isOpen, onClose, sheet, sheetData, forceEditab
                           <TableCell>
                             <Input type="number" min="0" max="100" value={row[externalMarkKey] || ''}
                               onChange={(e) => handleMarkChange(rowIndex, e.target.value)}
-                              className="w-24" disabled={view === 'submitted'}/>
+                              className="w-24" disabled={view === 'submitted' && !forceEditable}/>
                           </TableCell>
                         </TableRow>
                       )) : (
