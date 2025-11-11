@@ -399,7 +399,21 @@ const Sheets = () => {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-3xl font-bold">Sheets</h1>
+      <div className="flex justify-between items-center mb-6">
+        <h1 className="text-3xl font-bold">Sheets</h1>
+        <div className="flex gap-2">
+          <BulkDateTemplate 
+            selectedSubject={selectedSubject} 
+            selectedDepartment={selectedDepartment} 
+            subjects={subjects} 
+            departments={departments} 
+          />
+          <BulkDateManagerDialog 
+            onSuccess={fetchSheets} 
+            selectedSubject={selectedSubject} 
+          />
+        </div>
+      </div>
       
       <Card>
         <CardHeader>
@@ -469,26 +483,6 @@ const Sheets = () => {
         </CardContent>
       </Card>
       
-      <Card>
-        <CardHeader>
-          <CardTitle>Bulk Date Management</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="flex flex-wrap gap-4">
-            <BulkDateTemplate 
-              selectedSubject={selectedSubject} 
-              selectedDepartment={selectedDepartment} 
-              subjects={subjects} 
-              departments={departments} 
-            />
-            <BulkDateManagerDialog 
-              onSuccess={fetchSheets} 
-              selectedSubject={selectedSubject} 
-            />
-          </div>
-        </CardContent>
-      </Card>
-
       {selectedSubject && (
         <Card>
           <CardHeader>
