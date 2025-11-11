@@ -34,10 +34,9 @@ const uploadSchema = z.object({
 
 interface BulkDateManagerDialogProps {
   onSuccess: () => void;
-  selectedSubject: string;
 }
 
-const BulkDateManagerDialog = ({ onSuccess, selectedSubject }: BulkDateManagerDialogProps) => {
+const BulkDateManagerDialog = ({ onSuccess }: BulkDateManagerDialogProps) => {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isConfirmationOpen, setIsConfirmationOpen] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
@@ -63,7 +62,7 @@ const BulkDateManagerDialog = ({ onSuccess, selectedSubject }: BulkDateManagerDi
         if (parsedData.length === 0) throw new Error("The file is empty or doesn't contain valid data.");
 
         const updates = parsedData
-          .filter(row => row.sheet_id && row.subject_code)
+          .filter(row => row.sheet_id) // Only require sheet_id for update
           .map(row => ({
             id: row.sheet_id,
             start_date: row.start_date,
@@ -92,10 +91,7 @@ const BulkDateManagerDialog = ({ onSuccess, selectedSubject }: BulkDateManagerDi
     const toastId = showLoading(`Updating ${updatesToApply.length} sheets...`);
 
     try {
-      // Perform bulk update using a transaction-like approach (Supabase RPC or multiple updates)
-      // Since Supabase doesn't support bulk UPDATE with different WHERE clauses easily, we iterate.
-      // For simplicity and robustness, we'll use a single RPC call if available, but since we don't have a custom RPC, we iterate.
-      
+      // Perform bulk update by iterating over updates
       const updatePromises = updatesToApply.map(update => 
         supabase.from('sheets')
           .update({ start_date: update.start_date, end_date: update.end_date })
@@ -106,6 +102,7 @@ const BulkDateManagerDialog = ({ onSuccess, selectedSubject }: BulkDateManagerDi
       const failedUpdates = results.filter(r => r.error);
 
       if (failedUpdates.length > 0) {
+        console.error("Failed updates:", failedUpdates);
         throw new Error(`${failedUpdates.length} updates failed. Check console for details.`);
       }
 
@@ -132,7 +129,7 @@ const BulkDateManagerDialog = ({ onSuccess, selectedSubject }: BulkDateManagerDi
 
   return (
     <>
-      <Button onClick={() => fileInputRef.current?.click()} disabled={!selectedSubject}>
+      <Button onClick={() => fileInputRef.current?.click()}>
         <Upload className="w-4 h-4 mr-2" />
         Bulk Upload Dates
       </Button>

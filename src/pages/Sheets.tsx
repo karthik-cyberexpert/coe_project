@@ -403,14 +403,11 @@ const Sheets = () => {
         <h1 className="text-3xl font-bold">Sheets</h1>
         <div className="flex gap-2">
           <BulkDateTemplate 
-            selectedSubject={selectedSubject} 
-            selectedDepartment={selectedDepartment} 
             subjects={subjects} 
             departments={departments} 
           />
           <BulkDateManagerDialog 
             onSuccess={fetchSheets} 
-            selectedSubject={selectedSubject} 
           />
         </div>
       </div>
