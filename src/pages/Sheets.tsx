@@ -30,6 +30,8 @@ import EditSheetForm from '@/components/EditSheetForm';
 import EditableSheetViewerDialog from '@/components/EditableSheetViewerDialog';
 import StaffSheetViewerDialog from '@/components/StaffSheetViewerDialog';
 import { ColumnSelectionDialog } from '@/components/ColumnSelectionDialog';
+import BulkDateManagerDialog from '@/components/BulkDateManagerDialog';
+import BulkDateTemplate from '@/components/BulkDateTemplate';
 import * as XLSX from 'xlsx';
 
 interface Department {
@@ -463,6 +465,26 @@ const Sheets = () => {
               <Button onClick={() => fileInputRef.current?.click()} disabled={!selectedDepartment || !selectedSubject || !academicTerm || !selectedSemester}>Add Sheet</Button>
               <input type="file" ref={fileInputRef} onChange={handleFileSelect} className="hidden" accept=".xlsx" />
             </div>
+          </div>
+        </CardContent>
+      </Card>
+      
+      <Card>
+        <CardHeader>
+          <CardTitle>Bulk Date Management</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="flex flex-wrap gap-4">
+            <BulkDateTemplate 
+              selectedSubject={selectedSubject} 
+              selectedDepartment={selectedDepartment} 
+              subjects={subjects} 
+              departments={departments} 
+            />
+            <BulkDateManagerDialog 
+              onSuccess={fetchSheets} 
+              selectedSubject={selectedSubject} 
+            />
           </div>
         </CardContent>
       </Card>
