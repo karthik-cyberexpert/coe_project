@@ -1,5 +1,11 @@
 import { createContext } from 'react';
-import { User } from '@supabase/supabase-js';
+
+// Custom User type (replacing Supabase User)
+export interface User {
+  id: string;
+  email: string;
+  email_verified: boolean;
+}
 
 export interface Profile {
   full_name: string | null;

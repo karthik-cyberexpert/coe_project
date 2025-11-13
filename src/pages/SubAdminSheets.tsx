@@ -54,6 +54,7 @@ const SubAdminSheets = () => {
       .from('sheets')
       .select('*, attendance_marked')
       .eq('subject_id', selectedSubject)
+      .eq('attendance_marked', false)
       .order('created_at', { ascending: false });
     
     if (error) {
@@ -93,7 +94,8 @@ const SubAdminSheets = () => {
       const { data, error } = await supabase
         .from('subjects')
         .select('id, subject_name, subject_code')
-        .or(`department_id.eq.${selectedDepartment},department_id.is.null`);
+        .or(`department_id.eq.${selectedDepartment},department_id.is.null`)
+        .order('subject_name', { ascending: true });
 
       if (error) {
         showError('Failed to fetch subjects.');

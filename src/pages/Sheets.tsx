@@ -29,7 +29,7 @@ import { SheetUploadPreviewDialog } from '@/components/SheetUploadPreviewDialog'
 import EditSheetForm from '@/components/EditSheetForm';
 import EditableSheetViewerDialog from '@/components/EditableSheetViewerDialog';
 import StaffSheetViewerDialog from '@/components/StaffSheetViewerDialog';
-import { ColumnSelectionDialog } from '@/components/ColumnSelectionDialog';
+import { EnhancedDownloadDialog } from '@/components/EnhancedDownloadDialog';
 import BulkDateManagerDialog from '@/components/BulkDateManagerDialog';
 import BulkDateTemplate from '@/components/BulkDateTemplate';
 import * as XLSX from 'xlsx';
@@ -54,6 +54,7 @@ export interface Sheet {
   end_date?: string | null;
   year?: string | null;
   batch?: string | null;
+  maximum_internal_mark?: number | null;
 }
 
 const Sheets = () => {
@@ -160,7 +161,8 @@ const Sheets = () => {
       const { data, error } = await supabase
         .from('subjects')
         .select('id, subject_name, subject_code')
-        .or(`department_id.eq.${selectedDepartment},department_id.is.null`);
+        .or(`department_id.eq.${selectedDepartment},department_id.is.null`)
+        .order('subject_name', { ascending: true });
 
       if (error) {
         showError('Failed to fetch subjects.');
@@ -210,6 +212,11 @@ const Sheets = () => {
       const selectedSubjectData = subjects.find(s => s.id === selectedSubject);
       if (!selectedSubjectData) throw new Error('Could not find selected subject details.');
       const selectedSubjectCode = selectedSubjectData.subject_code;
+      // Normalize subject code for robust comparison (uppercase, remove spaces and non-alphanumerics)
+      const normSelectedSubjectCode = String(selectedSubjectCode ?? '')
+        .toUpperCase()
+        .replace(/\s+/g, '')
+        .replace(/[^A-Z0-9]/g, '');
 
       const data = await file.arrayBuffer();
       const workbook = XLSX.read(data);
@@ -227,38 +234,66 @@ const Sheets = () => {
         throw new Error(`Missing required columns: ${missingHeaders.join(', ')}`);
       }
 
+      // Define the exact column order we want
+      const orderedColumns = [
+        'register number',
+        'roll number',
+        'subject code',
+        'internal mark',
+        'attendance',
+        'duplicate number',
+        '1', '2', '3', '4', '5', '6', '7', '8', '9', '10',
+        '11', '12', '13', '14', '15',
+        'total',
+        'Result'
+      ];
+
       const processedData = jsonData.map(row => {
-        const newRow: Record<string, any> = {};
-        let rowSubjectCode: string | null = null;
-        
+        // Detect original keys case-insensitively
         const originalKeys = Object.keys(row);
-        const registerNumberKey = originalKeys.find(k => k.toLowerCase() === 'register number')!;
-        const subjectCodeKey = originalKeys.find(k => k.toLowerCase() === 'subject code')!;
-        const registerNumber = String(row[registerNumberKey] || '');
+        const regKey = originalKeys.find(k => k.toLowerCase() === 'register number');
+        const subKey = originalKeys.find(k => k.toLowerCase() === 'subject code');
+        const internalKey = originalKeys.find(k => k.toLowerCase() === 'internal mark');
 
-        for (const key of originalKeys) {
-            newRow[key] = row[key];
-            if (key.toLowerCase() === 'register number') {
-                newRow['roll number'] = registerNumber.length >= 4 
-                    ? registerNumber.slice(0, -4) + registerNumber.slice(-3) 
-                    : '';
-            }
-            if (key.toLowerCase() === 'subject code') {
-                rowSubjectCode = String(row[subjectCodeKey] || '').trim();
-            }
-        }
+        const registerNumber = String(regKey ? row[regKey] : '');
+        const subjectCode = String(subKey ? row[subKey] : '');
+        const internalMark = internalKey != null ? row[internalKey] : '';
+        // Normalized version of subject code from sheet for comparison only
+        const normRowSubjectCode = String(subjectCode ?? '')
+          .toUpperCase()
+          .replace(/\s+/g, '')
+          .replace(/[^A-Z0-9]/g, '');
+
+        // Build row as an array of key-value pairs in the exact order
+        const orderedRow: Record<string, any> = {};
         
-        newRow['attendance'] = '';
-        newRow['duplicate number'] = '';
-        newRow['external mark'] = '';
+        // Populate in order
+        orderedRow['register number'] = registerNumber;
+        orderedRow['roll number'] = registerNumber.length >= 4
+          ? registerNumber.slice(0, -4) + registerNumber.slice(-3)
+          : '';
+        orderedRow['subject code'] = subjectCode;
+        orderedRow['internal mark'] = internalMark;
+        orderedRow['attendance'] = '';
+        orderedRow['duplicate number'] = '';
 
-        newRow.status = rowSubjectCode === selectedSubjectCode ? 'matched' : 'mismatched';
-        return newRow;
+        // Add 15 external mark columns at the end
+        for (let i = 1; i <= 15; i++) {
+          orderedRow[`${i}`] = '';
+        }
+
+        // Add total and Result columns
+        orderedRow['total'] = '';
+        orderedRow['Result'] = '';
+
+        // Store internal status for filtering (not displayed as Result)
+        orderedRow._matchStatus = normRowSubjectCode && normRowSubjectCode === normSelectedSubjectCode ? 'matched' : 'mismatched';
+        return orderedRow;
       });
 
       const matchedRows = processedData
-        .filter(row => row.status === 'matched')
-        .map(({ status, ...rest }) => rest);
+        .filter(row => row._matchStatus === 'matched')
+        .map(({ _matchStatus, total, ...rest }) => rest);
 
       setPreviewData(processedData);
       setUploadData(matchedRows);
@@ -271,7 +306,7 @@ const Sheets = () => {
     }
   };
   
-  const handleConfirmUpload = async () => {
+  const handleConfirmUpload = async (maxInternalMark: number) => {
     if (uploadData.length === 0) {
         showError("No matched rows to upload.");
         return;
@@ -280,6 +315,46 @@ const Sheets = () => {
     const toastId = showLoading('Uploading sheet...');
     try {
         const newWorksheet = XLSX.utils.json_to_sheet(uploadData);
+        
+        // Add merged cells for headers
+        if (!newWorksheet['!merges']) newWorksheet['!merges'] = [];
+        
+        // Find the column indices for the external mark columns
+        // Assuming the columns are in order after 'duplicate number'
+        const headers = Object.keys(uploadData[0]);
+        const duplicateNumberIndex = headers.indexOf('duplicate number');
+        
+        // Calculate the starting column for external marks (after 'duplicate number')
+        const startCol = duplicateNumberIndex + 1;
+        
+        // Merge cells for "2 Marks" (columns 1-10)
+        newWorksheet['!merges'].push({
+          s: { r: 0, c: startCol },      // Start: row 0, column after 'duplicate number'
+          e: { r: 0, c: startCol + 9 }   // End: row 0, 10 columns later
+        });
+        
+        // Merge cells for "16 Marks" (columns 11-15)
+        newWorksheet['!merges'].push({
+          s: { r: 0, c: startCol + 10 }, // Start: row 0, after the 10th column
+          e: { r: 0, c: startCol + 14 }  // End: row 0, 5 columns later
+        });
+        
+        // Set the header text for merged cells
+        const col2MarksAddress = XLSX.utils.encode_cell({ r: 0, c: startCol });
+        const col16MarksAddress = XLSX.utils.encode_cell({ r: 0, c: startCol + 10 });
+        newWorksheet[col2MarksAddress] = { t: 's', v: '2 Marks' };
+        newWorksheet[col16MarksAddress] = { t: 's', v: '16 Marks' };
+
+        // Clear headers inside merged ranges (except the first cell) to avoid duplicate text
+        for (let c = startCol + 1; c <= startCol + 9; c++) {
+          const addr = XLSX.utils.encode_cell({ r: 0, c });
+          if (newWorksheet[addr]) delete newWorksheet[addr];
+        }
+        for (let c = startCol + 11; c <= startCol + 14; c++) {
+          const addr = XLSX.utils.encode_cell({ r: 0, c });
+          if (newWorksheet[addr]) delete newWorksheet[addr];
+        }
+        
         const newWorkbook = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(newWorkbook, newWorksheet, 'ProcessedData');
         const wbout = XLSX.write(newWorkbook, { bookType: 'xlsx', type: 'array' });
@@ -298,6 +373,7 @@ const Sheets = () => {
             subject_id: selectedSubject,
             year: academicTerm,
             batch: selectedSemester,
+            maximum_internal_mark: maxInternalMark,
         });
         if (insertError) throw insertError;
 
@@ -631,11 +707,12 @@ const Sheets = () => {
         isUploading={isUploading}
       />
       {sheetToDownload && (
-        <ColumnSelectionDialog
+        <EnhancedDownloadDialog
           isOpen={isColumnSelectorOpen}
           onClose={() => setIsColumnSelectorOpen(false)}
           sheetData={sheetDataForDownload}
           sheetName={sheetToDownload.sheet_name}
+          maxInternalMark={sheetToDownload.maximum_internal_mark || 50}
         />
       )}
     </div>

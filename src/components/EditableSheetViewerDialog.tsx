@@ -147,11 +147,12 @@ const EditableSheetViewerDialog = ({ isOpen, onClose, sheet, sheetData, forceEdi
     );
   }
 
+  // Sub-admin attendance marking: Only show Register Number and Attendance
   const displayHeaders = [registerNumberKey, attendanceKey].filter(Boolean) as string[];
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose(false)}>
-      <DialogContent className="sm:max-w-[80vw] max-h-[90vh] flex flex-col">
+      <DialogContent className="sm:max-w-[95vw] max-h-[90vh] flex flex-col">
         <DialogHeader><DialogTitle>{sheet.sheet_name}</DialogTitle></DialogHeader>
         
         <div className="flex justify-end gap-2 mb-4">
@@ -170,7 +171,7 @@ const EditableSheetViewerDialog = ({ isOpen, onClose, sheet, sheetData, forceEdi
         </div>
 
         <div className="flex-grow overflow-hidden min-h-0">
-          <ScrollArea className="h-[60vh] w-full rounded-md border">
+          <ScrollArea className="h-[60vh] w-full rounded-md border" orientation="both">
             <div className="w-max min-w-full">
               <Table>
                 <TableHeader>
@@ -201,7 +202,7 @@ const EditableSheetViewerDialog = ({ isOpen, onClose, sheet, sheetData, forceEdi
                               </SelectContent>
                             </Select>
                           ) : (
-                            String(row[header])
+                            String(row[header] ?? '')
                           )}
                         </TableCell>
                       ))}

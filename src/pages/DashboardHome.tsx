@@ -21,6 +21,7 @@ interface SheetWithRelations {
   year?: string | null;
   batch?: string | null;
   departments: {
+    id: string;
     degree: string;
     department_name: string;
   } | null;
@@ -28,6 +29,11 @@ interface SheetWithRelations {
     subject_code: string;
     subject_name: string;
   } | null;
+}
+
+interface Department {
+  id: string;
+  department_name: string;
 }
 
 const DashboardHome = () => {
@@ -38,8 +44,15 @@ const DashboardHome = () => {
 
   const [yearFilter, setYearFilter] = useState('all');
   const [quarterFilter, setQuarterFilter] = useState('all');
+  const [departmentFilter, setDepartmentFilter] = useState('all');
   const [yearOptions, setYearOptions] = useState<string[]>([]);
   const [quarterOptions, setQuarterOptions] = useState<string[]>([]);
+  const [departments, setDepartments] = useState<Department[]>([]);
+  const [loadingDepartments, setLoadingDepartments] = useState(false);
+  
+  // Show department filter for all roles except pure staff
+  const showDepartmentFilter = profile && (profile.is_admin || profile.is_ceo || profile.is_sub_admin || 
+    (profile.is_staff && !profile.is_admin && !profile.is_ceo && !profile.is_sub_admin));
 
   const [viewingSheet, setViewingSheet] = useState<SheetWithRelations | null>(null);
   const [sheetContent, setSheetContent] = useState<Record<string, any>[]>([]);
@@ -52,7 +65,7 @@ const DashboardHome = () => {
       setLoading(true);
       let query = supabase
         .from('sheets')
-        .select('*, departments(degree, department_name), subjects(subject_code, subject_name)');
+        .select('*, departments(id, degree, department_name), subjects(subject_code, subject_name)');
 
       if (profile.is_ceo && !profile.is_admin && !profile.is_sub_admin) {
         query = query.eq('attendance_marked', true);
@@ -65,7 +78,8 @@ const DashboardHome = () => {
       if (error) {
         showError('Failed to fetch sheet statuses.');
       } else {
-        const sheetData = data as any[];
+        const sheetData = Array.isArray(data) ? (data as any[]) : [];
+        console.log('📥 Frontend received data sample:', sheetData.length > 0 ? JSON.stringify(sheetData[0], null, 2) : 'No data');
         setSheets(sheetData);
         setFilteredSheets(sheetData);
 
@@ -91,6 +105,22 @@ const DashboardHome = () => {
     fetchSheets();
   }, [profile]);
 
+  // Fetch departments for all users (admin, ceo, sub-admin, staff)
+  useEffect(() => {
+    const fetchDepartments = async () => {
+      if (!profile) return;
+      setLoadingDepartments(true);
+      const { data, error } = await supabase.from('departments').select('id, department_name');
+      if (error) {
+        showError('Failed to fetch departments.');
+      } else {
+        setDepartments(data || []);
+      }
+      setLoadingDepartments(false);
+    };
+    fetchDepartments();
+  }, [profile]);
+
   useEffect(() => {
     let tempSheets = [...sheets];
     if (yearFilter !== 'all') {
@@ -99,8 +129,21 @@ const DashboardHome = () => {
     if (quarterFilter !== 'all') {
       tempSheets = tempSheets.filter(sheet => sheet.year?.endsWith(quarterFilter));
     }
+    if (departmentFilter !== 'all') {
+      tempSheets = tempSheets.filter(sheet => {
+        const deptId = (sheet.departments as any)?.id;
+        console.log('Department Filter Debug:', {
+          sheetName: sheet.sheet_name,
+          departments: sheet.departments,
+          deptId,
+          departmentFilter,
+          match: deptId === departmentFilter
+        });
+        return deptId === departmentFilter;
+      });
+    }
     setFilteredSheets(tempSheets);
-  }, [sheets, yearFilter, quarterFilter]);
+  }, [sheets, yearFilter, quarterFilter, departmentFilter]);
 
   const getStatus = (sheet: SheetWithRelations, userProfile: Profile) => {
     let status: 'Pending' | 'Finished' = 'Pending';
@@ -195,6 +238,19 @@ const DashboardHome = () => {
           <div className="flex justify-between items-center">
             <CardTitle>Sheet Status Overview</CardTitle>
             <div className="flex gap-2">
+              {showDepartmentFilter && (
+                <Select value={departmentFilter} onValueChange={setDepartmentFilter} disabled={loadingDepartments}>
+                  <SelectTrigger className="w-[200px]">
+                    <SelectValue placeholder={loadingDepartments ? "Loading..." : "Filter by Department"} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Departments</SelectItem>
+                    {departments.map(dept => (
+                      <SelectItem key={dept.id} value={dept.id}>{dept.department_name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
               <Select value={yearFilter} onValueChange={setYearFilter}>
                 <SelectTrigger className="w-[180px]">
                   <SelectValue placeholder="Filter by Year" />

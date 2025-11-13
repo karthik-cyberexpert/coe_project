@@ -7,7 +7,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { showError, showSuccess, showLoading, dismissToast } from '@/utils/toast';
 import { Eye, Download } from 'lucide-react';
 import SheetViewerDialog from '@/components/SheetViewerDialog';
-import { ColumnSelectionDialog } from '@/components/ColumnSelectionDialog';
+import { EnhancedDownloadDialog } from '@/components/EnhancedDownloadDialog';
 import * as XLSX from 'xlsx';
 
 interface Department {
@@ -29,8 +29,15 @@ interface Sheet {
   start_date?: string | null;
   end_date?: string | null;
   duplicates_generated: boolean;
+  maximum_internal_mark?: number | null;
+  year?: string | null;
+  batch?: string | null;
   subjects: {
     subject_code: string;
+    subject_name: string;
+  } | null;
+  departments: {
+    department_name: string;
   } | null;
 }
 
@@ -62,10 +69,10 @@ const CoeSheets = () => {
     setLoadingSheets(true);
     const { data, error } = await supabase
       .from('sheets')
-      .select('*, duplicates_generated, subjects(subject_code)')
+      .select('*, duplicates_generated, subjects(subject_code, subject_name), departments(department_name)')
       .eq('subject_id', selectedSubject)
       .eq('attendance_marked', true)
-      .order('created_at', { ascending: false });
+      .order('created_at', { ascending: false});
     
     if (error) {
       showError('Failed to fetch sheets.');
@@ -104,7 +111,8 @@ const CoeSheets = () => {
       const { data, error } = await supabase
         .from('subjects')
         .select('id, subject_name, subject_code')
-        .or(`department_id.eq.${selectedDepartment},department_id.is.null`);
+        .or(`department_id.eq.${selectedDepartment},department_id.is.null`)
+        .order('subject_name', { ascending: true });
 
       if (error) {
         showError('Failed to fetch subjects.');
@@ -253,6 +261,11 @@ const CoeSheets = () => {
                   <TableHeader>
                     <TableRow>
                       <TableHead>Sheet Name</TableHead>
+                      <TableHead>Subject Code</TableHead>
+                      <TableHead>Subject Name</TableHead>
+                      <TableHead>Department</TableHead>
+                      <TableHead>Academic Year</TableHead>
+                      <TableHead>Semester</TableHead>
                       <TableHead>Uploaded At</TableHead>
                       <TableHead className="text-right">Actions</TableHead>
                     </TableRow>
@@ -261,6 +274,11 @@ const CoeSheets = () => {
                     {sheets.length > 0 ? sheets.map(sheet => (
                       <TableRow key={sheet.id}>
                         <TableCell className="font-medium">{sheet.sheet_name}</TableCell>
+                        <TableCell>{sheet.subjects?.subject_code || 'N/A'}</TableCell>
+                        <TableCell>{sheet.subjects?.subject_name || 'N/A'}</TableCell>
+                        <TableCell>{sheet.departments?.department_name || 'N/A'}</TableCell>
+                        <TableCell>{sheet.year || 'N/A'}</TableCell>
+                        <TableCell>{sheet.batch || 'N/A'}</TableCell>
                         <TableCell>{new Date(sheet.created_at).toLocaleString()}</TableCell>
                         <TableCell className="text-right space-x-2">
                            <Button variant="ghost" size="icon" onClick={() => handleDownloadSheet(sheet)}>
@@ -273,7 +291,7 @@ const CoeSheets = () => {
                       </TableRow>
                     )) : (
                       <TableRow>
-                        <TableCell colSpan={3} className="text-center">No sheets found for this subject.</TableCell>
+                        <TableCell colSpan={8} className="text-center">No sheets found for this subject.</TableCell>
                       </TableRow>
                     )}
                   </TableBody>
@@ -292,11 +310,12 @@ const CoeSheets = () => {
         showBundleNumber={true}
       />
       {sheetToDownload && (
-        <ColumnSelectionDialog
+        <EnhancedDownloadDialog
           isOpen={isColumnSelectorOpen}
           onClose={() => setIsColumnSelectorOpen(false)}
           sheetData={sheetDataForDownload}
           sheetName={sheetToDownload.sheet_name}
+          maxInternalMark={sheetToDownload.maximum_internal_mark || 50}
         />
       )}
     </div>

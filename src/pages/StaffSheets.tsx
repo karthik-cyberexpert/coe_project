@@ -115,8 +115,9 @@ const StaffSheets = () => {
       setSelectedSubject('');
       const { data, error } = await supabase
         .from('subjects')
-        .select('id, subject_name, subject_code')
-        .or(`department_id.eq.${selectedDepartment},department_id.is.null`);
+        .select('id, subject_name, subject_code, department_id')
+        .or(`department_id.eq.${selectedDepartment},department_id.is.null`)
+        .order('subject_name', { ascending: true });
       if (error) {
         showError('Failed to fetch subjects.');
       } else {
@@ -150,7 +151,7 @@ const StaffSheets = () => {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-3xl font-bold">Update External Marks</h1>
+      <h1 className="text-3xl font-bold">Update Marks</h1>
       
       <Card>
         <CardHeader>
@@ -256,6 +257,7 @@ const StaffSheets = () => {
         isOpen={isViewerOpen}
         onClose={handleViewerClose}
         sheet={sheetToView}
+        forceEditable={!sheetToView?.external_marks_added}
       />
     </div>
   );

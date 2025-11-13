@@ -59,6 +59,24 @@ const ExaminerDetailsDialog = ({ isOpen, onClose, onSuccess, sheetId, bundleNumb
   const onSubmit = async (values: z.infer<typeof formSchema>) => {
     const toastId = showLoading("Saving examiner details...");
     try {
+      // Check if examiner details already exist
+      const { data: existing, error: checkError } = await supabase
+        .from("bundle_examiners")
+        .select('*')
+        .eq('sheet_id', sheetId)
+        .eq('bundle_number', bundleNumber)
+        .maybeSingle();
+
+      if (checkError) {
+        throw checkError;
+      }
+
+      if (existing) {
+        dismissToast(toastId);
+        showError("Examiner details already exist for this bundle.");
+        return;
+      }
+
       const { error } = await supabase.from("bundle_examiners").insert({
         sheet_id: sheetId,
         bundle_number: bundleNumber,

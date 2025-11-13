@@ -1,7 +1,7 @@
 import UserProfile from "./UserProfile";
-import { User } from "@supabase/supabase-js";
+import { User } from "@/contexts/DashboardContext";
 import { NavLink } from "react-router-dom";
-import { Sheet, Book, Building2, LayoutDashboard } from "lucide-react";
+import { Sheet, Book, Building2, LayoutDashboard, Users } from "lucide-react";
 
 interface Profile {
   full_name: string | null;
@@ -22,24 +22,31 @@ const commonNavItems = [
 ];
 
 const adminNavItems = [
-  { href: "/sheets", icon: Sheet, label: "Sheets" },
-  { href: "/subjects", icon: Book, label: "Subjects" },
-  { href: "/departments", icon: Building2, label: "Departments" },
+  { href: "/sheets", icon: Sheet, label: "Manage Sheets" },
+  { href: "/subjects", icon: Book, label: "Manage Subjects" },
+  { href: "/departments", icon: Building2, label: "Manage Departments" },
+  { href: "/users", icon: Users, label: "Manage Users" },
 ];
 
-const coeNavItems = [
-  { href: "/coe-sheets", icon: Sheet, label: "View Sheets" },
+const ceoNavItems = [
+  { href: "/coe-sheets", icon: Sheet, label: "COE Sheets" },
 ];
 
 const subAdminNavItems = [
-  { href: "/subadmin-sheets", icon: Sheet, label: "Sheets" },
+  { href: "/subadmin-sheets", icon: Sheet, label: "Sub-Admin Sheets" },
 ];
 
 const staffNavItems = [
-  { href: "/staff-sheets", icon: Sheet, label: "Sheets" },
+  { href: "/staff-sheets", icon: Sheet, label: "Staff Sheets" },
 ];
 
 const Sidebar = ({ user, profile, onSignOut }: SidebarProps) => {
+  console.log('🎨 Sidebar - Profile data:', profile);
+  console.log('🎨 Sidebar - is_admin:', profile.is_admin);
+  console.log('🎨 Sidebar - is_ceo:', profile.is_ceo);
+  console.log('🎨 Sidebar - is_sub_admin:', profile.is_sub_admin);
+  console.log('🎨 Sidebar - is_staff:', profile.is_staff);
+  
   return (
     <aside className="w-64 h-screen bg-gray-100 border-r flex flex-col flex-shrink-0">
       <UserProfile user={user} profile={profile} onSignOut={onSignOut} />
@@ -75,8 +82,8 @@ const Sidebar = ({ user, profile, onSignOut }: SidebarProps) => {
             </NavLink>
           ))
         )}
-        {profile.is_ceo && (
-          coeNavItems.map((item) => (
+        {profile.is_ceo && !profile.is_admin && (
+          ceoNavItems.map((item) => (
             <NavLink
               key={item.href}
               to={item.href}
@@ -91,7 +98,7 @@ const Sidebar = ({ user, profile, onSignOut }: SidebarProps) => {
             </NavLink>
           ))
         )}
-        {profile.is_sub_admin && (
+        {profile.is_sub_admin && !profile.is_admin && !profile.is_ceo && (
           subAdminNavItems.map((item) => (
             <NavLink
               key={item.href}

@@ -1,9 +1,8 @@
 import { supabase } from '@/integrations/supabase/client';
 import { useNavigate, Outlet } from 'react-router-dom';
 import { useEffect, useState } from 'react';
-import { User } from '@supabase/supabase-js';
 import Sidebar from '@/components/Sidebar';
-import { DashboardContext, Profile } from '@/contexts/DashboardContext';
+import { DashboardContext, User, Profile } from '@/contexts/DashboardContext';
 
 const DashboardLayout = () => {
   const navigate = useNavigate();
@@ -14,19 +13,29 @@ const DashboardLayout = () => {
   useEffect(() => {
     const getSessionData = async () => {
       const { data: { user } } = await supabase.auth.getUser();
+      console.log('🔍 DashboardLayout - User data:', user);
+      
       if (user) {
         setUser(user);
-        const { data: profileData, error } = await supabase
-          .from('profiles')
-          .select('full_name, is_admin, is_ceo, is_sub_admin, is_staff')
-          .eq('id', user.id)
-          .single();
-
-        if (error) {
-          console.error('Error fetching profile:', error);
-          setProfile({ full_name: null, is_admin: false, is_ceo: false, is_sub_admin: false, is_staff: false });
+        
+        // Profile data is included in the user object from MySQL adapter
+        // @ts-ignore - profile exists in our custom user object
+        if (user.profile) {
+          // @ts-ignore
+          console.log('✅ Profile found:', user.profile);
+          setProfile(user.profile);
         } else {
-          setProfile(profileData);
+          // Fallback: derive profile fields from flat user object (MySQL adapter)
+          console.warn('⚠️ No profile found in user object, deriving from user flags');
+          const anyUser: any = user as any;
+          const derived: Profile = {
+            full_name: anyUser.full_name ?? null,
+            is_admin: !!anyUser.is_admin,
+            is_ceo: !!anyUser.is_ceo,
+            is_sub_admin: !!anyUser.is_sub_admin,
+            is_staff: anyUser.is_staff !== undefined ? !!anyUser.is_staff : true,
+          };
+          setProfile(derived);
         }
       } else {
         navigate('/login');

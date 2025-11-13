@@ -18,6 +18,7 @@ import SubAdminProtectedRoute from "./components/SubAdminProtectedRoute";
 import SubAdminSheets from "./pages/SubAdminSheets";
 import StaffProtectedRoute from "./components/StaffProtectedRoute";
 import StaffSheets from "./pages/StaffSheets";
+import UserManagement from "./pages/UserManagement";
 
 const queryClient = new QueryClient();
 
@@ -26,7 +27,7 @@ const App = () => (
     <TooltipProvider>
       <Toaster />
       <Sonner />
-      <BrowserRouter>
+      <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
         <Routes>
           <Route path="/" element={<Index />} />
           <Route path="/login" element={<Login />} />
@@ -36,6 +37,7 @@ const App = () => (
               <Route path="/departments" element={<Departments />} />
               <Route path="/sheets" element={<Sheets />} />
               <Route path="/subjects" element={<Subjects />} />
+              <Route path="/users" element={<UserManagement />} />
             </Route>
             <Route element={<CoeProtectedRoute />}>
               <Route path="/coe-sheets" element={<CoeSheets />} />

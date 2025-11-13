@@ -20,7 +20,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { ScrollArea } from "@/components/ui/scroll-area";
+import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { useState, useEffect } from "react";
@@ -87,39 +87,39 @@ const SheetViewerDialog = ({
         : [];
 
       let processedPresentData = [...presentStudents];
-      
-      if (showBundles) {
-        const duplicateNumberKey = processedPresentData.length > 0 ? Object.keys(processedPresentData[0]).find(k => k.toLowerCase().replace(/\s/g, '') === 'duplicatenumber') : undefined;
-        if (duplicateNumberKey && currentSheet?.subjects?.subject_code) {
-          processedPresentData.sort((a, b) => (Number(a[duplicateNumberKey]) || 0) - (Number(b[duplicateNumberKey]) || 0));
-          const subjectCodePrefix = currentSheet.subjects.subject_code.slice(0, 6);
-          processedPresentData = processedPresentData.map((row, index) => ({
-            ...row,
-            __bundleName: `${subjectCodePrefix}-${String(Math.floor(index / 20) + 1).padStart(2, '0')}`,
-            __isFirstInBundle: index % 20 === 0,
-          }));
-        }
-      } else {
-        const rollNumberKey = processedPresentData.length > 0 ? Object.keys(processedPresentData[0]).find(k => k.toLowerCase().replace(/\s/g, '') === 'rollnumber') : undefined;
-        const duplicateNumberKey = processedPresentData.length > 0 ? Object.keys(processedPresentData[0]).find(k => k.toLowerCase().replace(/\s/g, '') === 'duplicatenumber') : undefined;
-        switch (sortOption) {
-          case 'roll_asc':
-            if (rollNumberKey) processedPresentData.sort((a, b) => String(a[rollNumberKey]).localeCompare(String(b[rollNumberKey]), undefined, { numeric: true }));
-            break;
-          case 'roll_desc':
-            if (rollNumberKey) processedPresentData.sort((a, b) => String(b[rollNumberKey]).localeCompare(String(a[rollNumberKey]), undefined, { numeric: true }));
-            break;
-          case 'dup_asc':
-            if (duplicateNumberKey) processedPresentData.sort((a, b) => (Number(a[duplicateNumberKey]) || 0) - (Number(b[duplicateNumberKey]) || 0));
-            break;
-          case 'dup_desc':
-            if (duplicateNumberKey) processedPresentData.sort((a, b) => (Number(b[duplicateNumberKey]) || 0) - (Number(a[duplicateNumberKey]) || 0));
-            break;
-          default:
-            break;
-        }
+
+      // Determine keys for sorting once
+      const rollNumberKey = processedPresentData.length > 0 ? Object.keys(processedPresentData[0]).find(k => k.toLowerCase().replace(/\s/g, '') === 'rollnumber') : undefined;
+      const duplicateNumberKey = processedPresentData.length > 0 ? Object.keys(processedPresentData[0]).find(k => k.toLowerCase().replace(/\s/g, '') === 'duplicatenumber') : undefined;
+
+      // Always apply sorting based on selection
+      switch (sortOption) {
+        case 'roll_asc':
+          if (rollNumberKey) processedPresentData.sort((a, b) => String(a[rollNumberKey]).localeCompare(String(b[rollNumberKey]), undefined, { numeric: true }));
+          break;
+        case 'roll_desc':
+          if (rollNumberKey) processedPresentData.sort((a, b) => String(b[rollNumberKey]).localeCompare(String(a[rollNumberKey]), undefined, { numeric: true }));
+          break;
+        case 'dup_asc':
+          if (duplicateNumberKey) processedPresentData.sort((a, b) => (Number(a[duplicateNumberKey]) || 0) - (Number(b[duplicateNumberKey]) || 0));
+          break;
+        case 'dup_desc':
+          if (duplicateNumberKey) processedPresentData.sort((a, b) => (Number(b[duplicateNumberKey]) || 0) - (Number(a[duplicateNumberKey]) || 0));
+          break;
+        default:
+          break;
       }
-      
+
+      // If bundles are shown, compute bundle labels and row grouping after sorting
+      if (showBundles && duplicateNumberKey && currentSheet?.subjects?.subject_code) {
+        const subjectCodeFull = currentSheet.subjects.subject_code;
+        processedPresentData = processedPresentData.map((row, index) => ({
+          ...row,
+          __bundleName: `${subjectCodeFull}-${String(Math.floor(index / 20) + 1).padStart(2, '0')}`,
+          __isFirstInBundle: index % 20 === 0,
+        }));
+      }
+
       setDisplayData([...processedPresentData, ...absentOrNilStudents]);
 
       if (sheetData.length > 0) {
@@ -247,20 +247,88 @@ const SheetViewerDialog = ({
     );
   }
 
-  const headers = (() => {
-    if (displayData.length === 0) return [];
-    let allHeaders = Object.keys(displayData[0]).filter(h => !h.startsWith('__'));
-    const attendanceKey = allHeaders.find(k => k.toLowerCase() === 'attendance');
-    const duplicateNumberKey = allHeaders.find(k => k.toLowerCase().replace(/\s/g, '') === 'duplicatenumber');
-    const isAttendanceMarked = attendanceKey ? displayData.some(row => row[attendanceKey] && String(row[attendanceKey]).trim() !== '') : false;
-    const areDuplicatesGenerated = duplicateNumberKey ? displayData.some(row => row[duplicateNumberKey] && String(row[duplicateNumberKey]).trim() !== '') : false;
-    if (!isAttendanceMarked || !areDuplicatesGenerated) {
-      allHeaders = allHeaders.filter(h => h.toLowerCase() !== 'external mark');
+  let headerKeyMap: Record<string, string> = {};
+  let attendanceKeyForRender: string | undefined;
+  let totalKeyForRender: string | undefined;
+  const orderedHeaders = (() => {
+    if (displayData.length === 0) return [] as string[];
+    
+    const firstRow = displayData[0] || {};
+    const allKeys = Object.keys(firstRow).filter(h => !h.startsWith('__'));
+    const norm = (s: string) => s.toLowerCase().replace(/\s/g, '');
+    
+    // Find column keys (case-insensitive)
+    const registerNumberKey = allKeys.find(k => norm(k) === 'registernumber');
+    const rollNumberKey = allKeys.find(k => norm(k) === 'rollnumber');
+    const subjectCodeKey = allKeys.find(k => norm(k) === 'subjectcode');
+    const attendanceKey = allKeys.find(k => norm(k) === 'attendance');
+    const duplicateNumberKey = allKeys.find(k => norm(k) === 'duplicatenumber');
+    const totalKey = allKeys.find(k => norm(k) === 'total');
+    // Internal mark column (named like "Internal Mark")
+    const internalMarkKey = allKeys.find(k => ['internalmark','internalmarks','internal'].includes(norm(k)));
+    // Column "2" (two-mark) previously used; we now compute Result instead of reading this
+    const twoMarksColumnKey = allKeys.find(k => norm(k) === '2marks');
+    
+    // Find mark columns (1 to 15) including '2'
+    const questionMarkKeys: string[] = [];
+    for (let i = 1; i <= 15; i++) {
+      const key = allKeys.find(k => k === String(i));
+      if (key) questionMarkKeys.push(key);
     }
-    return allHeaders;
+    questionMarkKeys.sort((a, b) => Number(a) - Number(b));
+    
+    // Build ordered headers in same order as download dialog
+    const headers: string[] = [];
+    const seen = new Set<string>();
+    const excluded = new Set<string>();
+    if (twoMarksColumnKey) excluded.add(twoMarksColumnKey);
+    if (totalKey) excluded.add(totalKey); // Will compute Total marks instead
+    
+    const maxInternalMarkKey = allKeys.find(k => norm(k) === 'maxinternalmark');
+    
+    const localMap: Record<string, string> = {};
+    const add = (k?: string, label?: string) => {
+      if (label && !k) {
+        headers.push(label);
+        localMap[label] = '__computed__';
+        return;
+      }
+      if (k && !seen.has(k) && !excluded.has(k)) {
+        const name = label || k;
+        headers.push(name);
+        seen.add(k);
+        localMap[name] = k;
+      }
+    };
+    
+    // Fixed order matching EnhancedDownloadDialog
+    add(registerNumberKey);
+    add(rollNumberKey);
+    add(subjectCodeKey);
+    add(internalMarkKey);
+    add(attendanceKey);
+    add(duplicateNumberKey);
+    
+    // Individual marks 1-15
+    questionMarkKeys.forEach(k => add(k));
+    
+    // Computed columns
+    add(undefined, 'External Total');
+    add(undefined, 'Converted External Total');
+    add(undefined, 'Total marks');
+    add(undefined, 'Result');
+    
+    // Append any remaining columns except excluded ones
+    const remaining = allKeys.filter(k => !seen.has(k) && !excluded.has(k));
+    remaining.forEach(k => add(k));
+    
+    headerKeyMap = localMap;
+    attendanceKeyForRender = attendanceKey;
+    totalKeyForRender = totalKey;
+    return headers;
   })();
 
-  const canGenerate = !currentSheet.duplicates_generated || forceGenerate;
+  const canGenerate = !currentSheet.duplicates_generated; // Cannot regenerate once generated
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
@@ -274,9 +342,9 @@ const SheetViewerDialog = ({
               <Table>
                 <TableHeader>
                   <TableRow>
-                    {showBundles && <TableHead>Bundle Number</TableHead>}
-                    {headers.map((header) => (
-                      <TableHead key={header}>{header}</TableHead>
+                    {showBundles && <TableHead className="sticky left-0 bg-white z-10 border-r">Bundle Number</TableHead>}
+                    {orderedHeaders.map((header, idx) => (
+                      <TableHead key={`${header}-${idx}`}>{header}</TableHead>
                     ))}
                   </TableRow>
                 </TableHeader>
@@ -286,24 +354,81 @@ const SheetViewerDialog = ({
                       {showBundles && row.__isFirstInBundle && (
                         <TableCell 
                           rowSpan={Math.min(20, displayData.length - rowIndex)}
-                          className="align-middle text-center font-semibold border-r"
+                          className="align-middle text-center font-semibold border-r sticky left-0 bg-white z-10"
                         >
                           {row.__bundleName}
                         </TableCell>
                       )}
-                      {headers.map((header) => (
-                        <TableCell key={`${rowIndex}-${header}`}>{String(row[header])}</TableCell>
-                      ))}
+                      {orderedHeaders.map((header, colIdx) => {
+                        const mapKey = (headerKeyMap && headerKeyMap[header]) ? headerKeyMap[header] : header;
+                        
+                        // Handle computed columns
+                        if (mapKey === '__computed__') {
+                          const firstRow = displayData[0] || {};
+                          const allKeys = Object.keys(firstRow).filter(h => !h.startsWith('__'));
+                          const norm = (s: string) => s.toLowerCase().replace(/\s/g, '');
+                          const internalMarkKey = allKeys.find(k => ['internalmark','internalmarks','internal'].includes(norm(k)));
+                          const maxInternalMarkKey = allKeys.find(k => norm(k) === 'maxinternalmark');
+                          const questionMarkKeys: string[] = [];
+                          for (let i = 1; i <= 15; i++) {
+                            const key = allKeys.find(k => k === String(i));
+                            if (key) questionMarkKeys.push(key);
+                          }
+                          
+                          // Calculate External Total
+                          const externalTotal = questionMarkKeys.reduce((sum, key) => {
+                            const v = row[key];
+                            const n = typeof v === 'number' ? v : parseInt(String(v ?? '').trim() || '0', 10);
+                            return sum + (isNaN(n) ? 0 : n);
+                          }, 0);
+                          
+                          // Get max internal mark (default 50)
+                          const maxInternalMark = maxInternalMarkKey 
+                            ? (typeof row[maxInternalMarkKey] === 'number' 
+                                ? row[maxInternalMarkKey] 
+                                : parseInt(String(row[maxInternalMarkKey] ?? '').trim() || '50', 10))
+                            : 50;
+                          const externalMaxMark = 100 - maxInternalMark;
+                          const convertedExternalTotal = Math.round((externalTotal / 100) * externalMaxMark);
+                          
+                          // Get internal mark value
+                          const internalVal = internalMarkKey 
+                            ? (typeof row[internalMarkKey] === 'number' 
+                                ? row[internalMarkKey] 
+                                : parseInt(String(row[internalMarkKey] ?? '').trim() || '0', 10))
+                            : 0;
+                          const totalMarks = Math.round((isNaN(internalVal) ? 0 : internalVal) + convertedExternalTotal);
+                          
+                          // Calculate result
+                          const att = attendanceKeyForRender ? String(row[attendanceKeyForRender] ?? '').trim().toLowerCase() : '';
+                          const result = att === 'absent' ? 'AAA' : (externalTotal >= 50 && totalMarks >= 50 ? 'Pass' : 'Fail');
+                          
+                          if (header === 'External Total') {
+                            return <TableCell key={`${rowIndex}-${colIdx}`}>{externalTotal}</TableCell>;
+                          } else if (header === 'Converted External Total') {
+                            return <TableCell key={`${rowIndex}-${colIdx}`}>{convertedExternalTotal}</TableCell>;
+                          } else if (header === 'Total marks') {
+                            return <TableCell key={`${rowIndex}-${colIdx}`}>{totalMarks}</TableCell>;
+                          } else if (header === 'Result') {
+                            return <TableCell key={`${rowIndex}-${colIdx}`}>{result}</TableCell>;
+                          }
+                        }
+                        
+                        return (
+                          <TableCell key={`${rowIndex}-${colIdx}`}>{String(row[mapKey] ?? '')}</TableCell>
+                        );
+                      })}
                     </TableRow>
                   ))}
                 </TableBody>
               </Table>
             </div>
+            <ScrollBar orientation="horizontal" />
           </ScrollArea>
         </div>
         <DialogFooter className="pt-4 border-t flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
           <div className="flex items-center gap-2">
-            <Select value={sortOption} onValueChange={setSortOption} disabled={showBundles}>
+            <Select value={sortOption} onValueChange={setSortOption}>
               <SelectTrigger className="w-[240px]">
                 <SelectValue placeholder="Sort by..." />
               </SelectTrigger>
@@ -348,7 +473,7 @@ const SheetViewerDialog = ({
                   )}
                 </Tooltip>
               </TooltipProvider>
-              <Button variant="outline" onClick={handleReset} disabled={isSaving}>
+              <Button variant="outline" onClick={handleReset} disabled={isSaving || !canGenerate}>
                 Reset
               </Button>
             </div>

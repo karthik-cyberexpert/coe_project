@@ -1,6 +1,6 @@
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
-import { User } from "@supabase/supabase-js";
+import { User } from "@/contexts/DashboardContext";
 
 interface Profile {
   full_name: string | null;
