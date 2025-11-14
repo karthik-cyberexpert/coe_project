@@ -17,6 +17,7 @@ interface Subject {
   id: string;
   subject_name: string;
   subject_code: string;
+  department_id: string | null;
 }
 
 export interface Sheet {
@@ -74,7 +75,10 @@ const StaffSheets = () => {
       showError('Failed to fetch sheets.');
       setSheets([]);
     } else {
-      setSheets(data as Sheet[]);
+      const allSheets = (data || []) as (Sheet & { subject_id?: string })[];
+      // Extra safety: only keep rows whose subject_id matches the currently selected subject
+      const filtered = allSheets.filter((sheet) => sheet.subject_id === selectedSubject);
+      setSheets(filtered as Sheet[]);
     }
     setLoading(prev => ({ ...prev, sheets: false }));
   }, [selectedDepartment, selectedSubject, academicTerm, selectedSemester]);
@@ -116,12 +120,16 @@ const StaffSheets = () => {
       const { data, error } = await supabase
         .from('subjects')
         .select('id, subject_name, subject_code, department_id')
-        .or(`department_id.eq.${selectedDepartment},department_id.is.null`)
         .order('subject_name', { ascending: true });
       if (error) {
         showError('Failed to fetch subjects.');
       } else {
-        setSubjects(data as Subject[]);
+        const allSubjects = (data || []) as Subject[];
+        // Only include subjects for the selected department and common subjects (department_id is null)
+        const filtered = allSubjects.filter(
+          (sub) => sub.department_id === selectedDepartment || sub.department_id === null
+        );
+        setSubjects(filtered);
       }
       setLoading(prev => ({ ...prev, subjects: false }));
     };

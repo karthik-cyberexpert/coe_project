@@ -107,7 +107,7 @@ const ExaminerDetailsDialog = ({ isOpen, onClose, onSuccess, sheetId, bundleNumb
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
               <div className="space-y-4 p-4 border rounded-md">
-                <h3 className="text-lg font-semibold">Internal Examiner</h3>
+                <h3 className="text-lg font-semibold">Examiner</h3>
                 <FormField control={form.control} name="internal_examiner_name" render={({ field }) => (
                   <FormItem><FormLabel>Name</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
                 )} />

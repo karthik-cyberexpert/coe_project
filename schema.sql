@@ -730,52 +730,52 @@ WHERE u.email = 'subadmin@coe.com';
 -- INSERT SAMPLE DEPARTMENTS
 -- ==============================================
 
-INSERT INTO departments (id, degree, department_code, department_name, created_at) VALUES
-(UUID(), 'B.Tech', 'CSE', 'Computer Science and Engineering', NOW()),
-(UUID(), 'B.Tech', 'ECE', 'Electronics and Communication Engineering', NOW()),
-(UUID(), 'B.Tech', 'MECH', 'Mechanical Engineering', NOW()),
-(UUID(), 'B.Tech', 'CIVIL', 'Civil Engineering', NOW()),
-(UUID(), 'M.Tech', 'CSE-DS', 'Data Science', NOW());
+-- INSERT INTO departments (id, degree, department_code, department_name, created_at) VALUES
+-- (UUID(), 'B.Tech', 'CSE', 'Computer Science and Engineering', NOW()),
+-- (UUID(), 'B.Tech', 'ECE', 'Electronics and Communication Engineering', NOW()),
+-- (UUID(), 'B.Tech', 'MECH', 'Mechanical Engineering', NOW()),
+-- (UUID(), 'B.Tech', 'CIVIL', 'Civil Engineering', NOW()),
+-- (UUID(), 'M.Tech', 'CSE-DS', 'Data Science', NOW());
 
 -- ==============================================
 -- INSERT SAMPLE SUBJECTS
 -- ==============================================
 
 -- Get department IDs for reference
-SET @cse_id = (SELECT id FROM departments WHERE department_code = 'CSE' LIMIT 1);
-SET @ece_id = (SELECT id FROM departments WHERE department_code = 'ECE' LIMIT 1);
-SET @mech_id = (SELECT id FROM departments WHERE department_code = 'MECH' LIMIT 1);
+-- SET @cse_id = (SELECT id FROM departments WHERE department_code = 'CSE' LIMIT 1);
+-- SET @ece_id = (SELECT id FROM departments WHERE department_code = 'ECE' LIMIT 1);
+-- SET @mech_id = (SELECT id FROM departments WHERE department_code = 'MECH' LIMIT 1);
 
 -- Department-specific subjects
-INSERT INTO subjects (id, subject_code, subject_name, department_id, created_at) VALUES
-(UUID(), 'CS101', 'Data Structures and Algorithms', @cse_id, NOW()),
-(UUID(), 'CS201', 'Database Management Systems', @cse_id, NOW()),
-(UUID(), 'CS301', 'Machine Learning', @cse_id, NOW()),
-(UUID(), 'EC101', 'Digital Electronics', @ece_id, NOW()),
-(UUID(), 'EC201', 'Communication Systems', @ece_id, NOW()),
-(UUID(), 'ME101', 'Engineering Mechanics', @mech_id, NOW()),
-(UUID(), 'ME201', 'Thermodynamics', @mech_id, NOW());
+-- INSERT INTO subjects (id, subject_code, subject_name, department_id, created_at) VALUES
+-- (UUID(), 'CS101', 'Data Structures and Algorithms', @cse_id, NOW()),
+-- (UUID(), 'CS201', 'Database Management Systems', @cse_id, NOW()),
+-- (UUID(), 'CS301', 'Machine Learning', @cse_id, NOW()),
+-- (UUID(), 'EC101', 'Digital Electronics', @ece_id, NOW()),
+-- (UUID(), 'EC201', 'Communication Systems', @ece_id, NOW()),
+-- (UUID(), 'ME101', 'Engineering Mechanics', @mech_id, NOW()),
+-- (UUID(), 'ME201', 'Thermodynamics', @mech_id, NOW());
 
 -- Common subjects (no department_id)
-INSERT INTO subjects (id, subject_code, subject_name, department_id, created_at) VALUES
-(UUID(), 'MA101', 'Engineering Mathematics I', NULL, NOW()),
-(UUID(), 'PH101', 'Engineering Physics', NULL, NOW()),
-(UUID(), 'CH101', 'Engineering Chemistry', NULL, NOW()),
-(UUID(), 'EN101', 'English Communication', NULL, NOW());
+-- INSERT INTO subjects (id, subject_code, subject_name, department_id, created_at) VALUES
+-- (UUID(), 'MA101', 'Engineering Mathematics I', NULL, NOW()),
+-- (UUID(), 'PH101', 'Engineering Physics', NULL, NOW()),
+-- (UUID(), 'CH101', 'Engineering Chemistry', NULL, NOW()),
+-- (UUID(), 'EN101', 'English Communication', NULL, NOW());
 
 -- ==============================================
 -- INSERT SAMPLE SHEETS
 -- ==============================================
 
 -- Get user ID for admin (sheet uploader)
-SET @admin_id = (SELECT id FROM users WHERE email = 'admin@coe.com' LIMIT 1);
-SET @staff_id = (SELECT id FROM users WHERE email = 'staff@coe.com' LIMIT 1);
+-- SET @admin_id = (SELECT id FROM users WHERE email = 'admin@coe.com' LIMIT 1);
+-- SET @staff_id = (SELECT id FROM users WHERE email = 'staff@coe.com' LIMIT 1);
 
 -- Get subject IDs
-SET @ds_algo_id = (SELECT id FROM subjects WHERE subject_code = 'CS101' LIMIT 1);
-SET @dbms_id = (SELECT id FROM subjects WHERE subject_code = 'CS201' LIMIT 1);
-SET @ml_id = (SELECT id FROM subjects WHERE subject_code = 'CS301' LIMIT 1);
-SET @math_id = (SELECT id FROM subjects WHERE subject_code = 'MA101' LIMIT 1);
+-- SET @ds_algo_id = (SELECT id FROM subjects WHERE subject_code = 'CS101' LIMIT 1);
+-- SET @dbms_id = (SELECT id FROM subjects WHERE subject_code = 'CS201' LIMIT 1);
+-- SET @ml_id = (SELECT id FROM subjects WHERE subject_code = 'CS301' LIMIT 1);
+-- SET @math_id = (SELECT id FROM subjects WHERE subject_code = 'MA101' LIMIT 1);
 
 INSERT INTO sheets (
     id, sheet_name, file_path, subject_id, department_id, user_id,

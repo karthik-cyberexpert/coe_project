@@ -43,6 +43,7 @@ interface Subject {
   id: string;
   subject_name: string;
   subject_code: string;
+  department_id: string | null;
 }
 
 export interface Sheet {
@@ -160,14 +161,18 @@ const Sheets = () => {
       
       const { data, error } = await supabase
         .from('subjects')
-        .select('id, subject_name, subject_code')
-        .or(`department_id.eq.${selectedDepartment},department_id.is.null`)
+        .select('id, subject_name, subject_code, department_id')
         .order('subject_name', { ascending: true });
 
       if (error) {
         showError('Failed to fetch subjects.');
       } else {
-        setSubjects(data as Subject[]);
+        const allSubjects = (data || []) as Subject[];
+        // Only include subjects for the selected department and common subjects (department_id is null)
+        const filtered = allSubjects.filter(
+          (sub) => sub.department_id === selectedDepartment || sub.department_id === null
+        );
+        setSubjects(filtered);
       }
       setLoadingSubjects(false);
     };
@@ -314,14 +319,58 @@ const Sheets = () => {
     setIsUploading(true);
     const toastId = showLoading('Uploading sheet...');
     try {
-        const newWorksheet = XLSX.utils.json_to_sheet(uploadData);
+        // Determine if the selected subject is a common subject (shared across departments)
+        const selectedSubjectObj = subjects.find((s) => s.id === selectedSubject);
+        const isCommonSubject = selectedSubjectObj?.department_id === null;
+
+        // For common subjects, we want to use a shared file path so that
+        // uploads from multiple departments append into the same sheet.
+        const safeTerm = academicTerm.replace(/\s+/g, '-');
+        const safeSem = selectedSemester.replace(/\s+/g, '-');
+        const sharedFilePath = `common/${selectedSubject}/${safeTerm}-${safeSem}.xlsx`;
+
+        // Default per-department path (existing behaviour)
+        const perDeptFilePath = `${selectedDepartment}/${selectedSubject}/${Date.now()}-${originalFileName}`;
+
+        const targetFilePath = isCommonSubject ? sharedFilePath : perDeptFilePath;
+
+        // If this is a common subject and a shared sheet already exists, load
+        // existing rows so we can append the new rows instead of overwriting.
+        let existingRows: any[] = [];
+        let sharedFileExists = false;
+        if (isCommonSubject) {
+          try {
+            const { data: existingFile, error: existingError } = await supabase.storage
+              .from('sheets')
+              .download(targetFilePath);
+
+            if (!existingError && existingFile) {
+              sharedFileExists = true;
+              const existingBuffer = await existingFile.arrayBuffer();
+              const existingWb = XLSX.read(existingBuffer, { type: 'array' });
+              const existingSheetName = existingWb.SheetNames[0];
+              if (existingSheetName) {
+                const existingWs = existingWb.Sheets[existingSheetName];
+                existingRows = XLSX.utils.sheet_to_json(existingWs);
+              }
+            }
+          } catch {
+            // If download fails (e.g., file does not exist yet), we simply treat
+            // this as the first shared upload.
+            sharedFileExists = false;
+          }
+        }
+
+        const mergedRows = isCommonSubject ? [...existingRows, ...uploadData] : uploadData;
+
+        const newWorksheet = XLSX.utils.json_to_sheet(mergedRows);
         
         // Add merged cells for headers
         if (!newWorksheet['!merges']) newWorksheet['!merges'] = [];
         
         // Find the column indices for the external mark columns
         // Assuming the columns are in order after 'duplicate number'
-        const headers = Object.keys(uploadData[0]);
+        const headers = Object.keys(mergedRows[0]);
         const duplicateNumberIndex = headers.indexOf('duplicate number');
         
         // Calculate the starting column for external marks (after 'duplicate number')
@@ -361,14 +410,24 @@ const Sheets = () => {
         const blob = new Blob([wbout], { type: 'application/octet-stream' });
         const processedFile = new File([blob], originalFileName, { type: blob.type });
 
-        const filePath = `${selectedDepartment}/${selectedSubject}/${Date.now()}-${processedFile.name}`;
-        
-        const { error: uploadError } = await supabase.storage.from('sheets').upload(filePath, processedFile);
-        if (uploadError) throw uploadError;
+        // Upload or update the file in storage
+        let storageError;
+        if (isCommonSubject && sharedFileExists) {
+          ({ error: storageError } = await supabase.storage
+            .from('sheets')
+            .update(targetFilePath, processedFile));
+        } else {
+          ({ error: storageError } = await supabase.storage
+            .from('sheets')
+            .upload(targetFilePath, processedFile));
+        }
+        if (storageError) throw storageError;
 
+        // Always create a sheet record for this department so that filters
+        // continue to work, but point to the shared file when subject is common.
         const { error: insertError } = await supabase.from('sheets').insert({
             sheet_name: processedFile.name,
-            file_path: filePath,
+            file_path: targetFilePath,
             department_id: selectedDepartment,
             subject_id: selectedSubject,
             year: academicTerm,

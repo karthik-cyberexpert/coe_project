@@ -182,12 +182,15 @@ const StaffSheetViewerDialog = ({ isOpen, onClose, sheet, sheetData, forceEditab
             const normalize = (v: any) => String(v ?? '').trim().toLowerCase();
             const normalizedSelected = normalize(selectedBundle);
             const matched = examinerRows?.find(r => normalize(r.bundle_number) === normalizedSelected) || null;
+            const fallbackExaminer = examinerRows && examinerRows.length > 0 ? examinerRows[0] : null;
             
             console.log('[StaffSheetViewerDialog] Bundle examiner query result:', { count: examinerRows?.length || 0, error });
             if (matched) {
                 console.log('[StaffSheetViewerDialog] Matched examiner row for bundle:', `'${matched.bundle_number}'`, '=> normalized:', normalize(matched.bundle_number));
+            } else if (fallbackExaminer) {
+                console.log('[StaffSheetViewerDialog] No exact match found. Using first examiner row as fallback:', fallbackExaminer);
             } else {
-                console.log('[StaffSheetViewerDialog] No exact match found. First row sample:', examinerRows?.[0]);
+                console.log('[StaffSheetViewerDialog] No examiner rows found for this sheet.');
             }
             
             if (error) {
@@ -223,7 +226,8 @@ const StaffSheetViewerDialog = ({ isOpen, onClose, sheet, sheetData, forceEditab
 
             // Set view based on whether bundle is finalized or entire sheet is finalized
             const isSheetFinalized = !!sheet?.external_marks_added;
-            const isBundleFinalized = !!matched;
+            // Treat bundle as finalized if we have a direct match OR any examiner row for this sheet.
+            const isBundleFinalized = !!matched || !!fallbackExaminer;
             // Once a bundle is saved (has examiner details), it should NEVER be editable again for staff
             // forceEditable only applies to sheet-level finalization (for admins), not bundle-level
             const shouldBeReadOnly = isBundleFinalized || (isSheetFinalized && !forceEditable);
@@ -233,8 +237,8 @@ const StaffSheetViewerDialog = ({ isOpen, onClose, sheet, sheetData, forceEditab
                 console.log('[StaffSheetViewerDialog] - Bundle finalized:', isBundleFinalized);
                 console.log('[StaffSheetViewerDialog] - Sheet finalized:', isSheetFinalized);
                 console.log('[StaffSheetViewerDialog] - Selected bundle:', selectedBundle);
-                console.log('[StaffSheetViewerDialog] - Examiner data exists:', !!matched);
-                setExaminerDetails(matched || null);
+                console.log('[StaffSheetViewerDialog] - Examiner data used:', matched || fallbackExaminer || null);
+                setExaminerDetails(matched || fallbackExaminer || null);
                 setView('submitted');
                 setIsReadOnly(true);
             } else {
@@ -392,10 +396,24 @@ const StaffSheetViewerDialog = ({ isOpen, onClose, sheet, sheetData, forceEditab
   };
 
   const handleDownloadPdf = () => {
-    if (!sheet || !examinerDetails || !editedData.length || !duplicateNumberKey) {
+    if (!sheet || !editedData.length || !duplicateNumberKey) {
         showError("Cannot generate PDF. Data is missing.");
         return;
     }
+
+    // Use examiner details if available, otherwise fall back to placeholders so
+    // PDF generation still works even if examiner info was not captured.
+    const safeExaminerDetails: ExaminerDetails = examinerDetails || {
+        internal_examiner_name: '-',
+        internal_examiner_designation: '-',
+        internal_examiner_department: '-',
+        internal_examiner_college: '-',
+        chief_name: '-',
+        chief_designation: '-',
+        chief_department: '-',
+        chief_college: '-',
+    };
+
     const doc = new jsPDF('landscape'); // Landscape for more columns
     
     // Header
@@ -487,7 +505,7 @@ const StaffSheetViewerDialog = ({ isOpen, onClose, sheet, sheetData, forceEditab
     // Footer
     const finalY = (doc as any).lastAutoTable.finalY + 15;
     doc.setFont('helvetica', 'bold');
-    doc.text("Internal Examiner", 15, finalY);
+    doc.text("Examiner", 15, finalY);
     doc.text("CHIEF", doc.internal.pageSize.getWidth() / 2 + 15, finalY);
     
     doc.setFont('helvetica', 'normal');
@@ -502,17 +520,17 @@ const StaffSheetViewerDialog = ({ isOpen, onClose, sheet, sheetData, forceEditab
         doc.text(value, x + 30, y);
     };
 
-    addDetail("Name", examinerDetails.internal_examiner_name, examinerX, currentY);
-    addDetail("Name", examinerDetails.chief_name || '-', chiefX, currentY);
+    addDetail("Name", safeExaminerDetails.internal_examiner_name, examinerX, currentY);
+    addDetail("Name", safeExaminerDetails.chief_name || '-', chiefX, currentY);
     currentY += 7;
-    addDetail("Designation", examinerDetails.internal_examiner_designation, examinerX, currentY);
-    addDetail("Designation", examinerDetails.chief_designation || '-', chiefX, currentY);
+    addDetail("Designation", safeExaminerDetails.internal_examiner_designation, examinerX, currentY);
+    addDetail("Designation", safeExaminerDetails.chief_designation || '-', chiefX, currentY);
     currentY += 7;
-    addDetail("Department", examinerDetails.internal_examiner_department, examinerX, currentY);
-    addDetail("Department", examinerDetails.chief_department || '-', chiefX, currentY);
+    addDetail("Department", safeExaminerDetails.internal_examiner_department, examinerX, currentY);
+    addDetail("Department", safeExaminerDetails.chief_department || '-', chiefX, currentY);
     currentY += 7;
-    addDetail("College", examinerDetails.internal_examiner_college, examinerX, currentY);
-    addDetail("College", examinerDetails.chief_college || '-', chiefX, currentY);
+    addDetail("College", safeExaminerDetails.internal_examiner_college, examinerX, currentY);
+    addDetail("College", safeExaminerDetails.chief_college || '-', chiefX, currentY);
 
     doc.save(`${selectedBundle}_marks.pdf`);
   };
@@ -616,7 +634,8 @@ const StaffSheetViewerDialog = ({ isOpen, onClose, sheet, sheetData, forceEditab
                 {(isReadOnly || view === 'submitted' || !!examinerDetails) ? (
                   <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 w-full">
                     <span className="text-sm text-muted-foreground">This bundle has been finalized and cannot be edited.</span>
-                    <Button onClick={handleDownloadPdf} disabled={!examinerDetails || !editedData.length}>Download PDF</Button>
+                    {/* Allow PDF download whenever there is data, even if the sheet is finalized. */}
+                    <Button onClick={handleDownloadPdf} disabled={editedData.length === 0}>Download PDF</Button>
                   </div>
                 ) : (
                   <Button onClick={handleSaveChanges} disabled={isSaving || editedData.length === 0 || isReadOnly || !!examinerDetails}>

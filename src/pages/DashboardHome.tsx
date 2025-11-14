@@ -78,12 +78,42 @@ const DashboardHome = () => {
       if (error) {
         showError('Failed to fetch sheet statuses.');
       } else {
-        const sheetData = Array.isArray(data) ? (data as any[]) : [];
-        console.log('📥 Frontend received data sample:', sheetData.length > 0 ? JSON.stringify(sheetData[0], null, 2) : 'No data');
-        setSheets(sheetData);
-        setFilteredSheets(sheetData);
+        const rawData = Array.isArray(data) ? (data as any[]) : [];
+        console.log('📥 Frontend received data sample:', rawData.length > 0 ? JSON.stringify(rawData[0], null, 2) : 'No data');
 
-        if (sheetData.length > 0) {
+        // Collapse shared sheets (common subjects) so that all rows pointing to the
+        // same underlying file_path appear as a single row in the dashboard.
+        const groupedByFile: Record<string, any> = {};
+        rawData.forEach((row) => {
+          if (!row.file_path) {
+            groupedByFile[`__no_path__${row.id}`] = row;
+            return;
+          }
+          if (!groupedByFile[row.file_path]) {
+            groupedByFile[row.file_path] = { ...row };
+          } else {
+            // Merge department info to reflect that multiple departments share this sheet
+            const existing = groupedByFile[row.file_path];
+            const existingDept = existing.departments?.department_name;
+            const newDept = row.departments?.department_name;
+            if (existingDept && newDept && existingDept !== newDept) {
+              const namesSet = new Set<string>(existingDept.split(',').map((s: string) => s.trim()));
+              namesSet.add(newDept);
+              existing.departments = {
+                ...existing.departments,
+                department_name: Array.from(namesSet).join(', '),
+              };
+            }
+          }
+        });
+
+        const collapsedSheets = Object.values(groupedByFile) as SheetWithRelations[];
+
+        setSheets(collapsedSheets);
+        setFilteredSheets(collapsedSheets);
+
+        if (collapsedSheets.length > 0) {
+          const sheetData = collapsedSheets;
           const uniqueYears = new Set<string>();
           const uniqueQuarters = new Set<string>();
           sheetData.forEach(sheet => {

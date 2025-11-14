@@ -35,6 +35,8 @@ interface Sheet {
   file_path: string;
   created_at: string;
   duplicates_generated?: boolean;
+  // Set to true when staff have finished entering external marks for this sheet
+  external_marks_added?: boolean;
   subjects?: {
     subject_code: string;
   } | null;
@@ -167,10 +169,15 @@ const SheetViewerDialog = ({
         : [];
 
       const dataToShuffle = [...presentStudents];
-      const groups = [];
-      for (let i = 0; i < dataToShuffle.length; i += 5) {
-        groups.push(dataToShuffle.slice(i, i + 5));
+
+      // Determine group size based on number of present rows.
+      // If more than 70 rows, use groups of 10; otherwise use groups of 5.
+      const groupSize = dataToShuffle.length > 70 ? 10 : 5;
+      const groups: any[][] = [];
+      for (let i = 0; i < dataToShuffle.length; i += groupSize) {
+        groups.push(dataToShuffle.slice(i, i + groupSize));
       }
+
       const shuffleArray = (array: any[]) => {
         for (let i = array.length - 1; i > 0; i--) {
           const j = Math.floor(Math.random() * (i + 1));
@@ -178,6 +185,8 @@ const SheetViewerDialog = ({
         }
         return array;
       };
+
+      // First shuffle the groups themselves, then shuffle the rows within each group.
       const shuffledGroups = shuffleArray(groups);
       const shuffledData = shuffledGroups.map(group => shuffleArray([...group])).flat();
       
@@ -254,7 +263,8 @@ const SheetViewerDialog = ({
     if (displayData.length === 0) return [] as string[];
     
     const firstRow = displayData[0] || {};
-    const allKeys = Object.keys(firstRow).filter(h => !h.startsWith('__'));
+    // Filter out internal helper keys and any spurious "0" column that can appear in some sheets
+    const allKeys = Object.keys(firstRow).filter(h => !h.startsWith('__') && h !== '0');
     const norm = (s: string) => s.toLowerCase().replace(/\s/g, '');
     
     // Find column keys (case-insensitive)
@@ -402,6 +412,7 @@ const SheetViewerDialog = ({
                           // Calculate result
                           const att = attendanceKeyForRender ? String(row[attendanceKeyForRender] ?? '').trim().toLowerCase() : '';
                           const result = att === 'absent' ? 'AAA' : (externalTotal >= 50 && totalMarks >= 50 ? 'Pass' : 'Fail');
+                          const isFinishedByStaff = !!currentSheet?.external_marks_added;
                           
                           if (header === 'External Total') {
                             return <TableCell key={`${rowIndex}-${colIdx}`}>{externalTotal}</TableCell>;
@@ -410,7 +421,8 @@ const SheetViewerDialog = ({
                           } else if (header === 'Total marks') {
                             return <TableCell key={`${rowIndex}-${colIdx}`}>{totalMarks}</TableCell>;
                           } else if (header === 'Result') {
-                            return <TableCell key={`${rowIndex}-${colIdx}`}>{result}</TableCell>;
+                            // Only show Pass/Fail/AAA once staff have finished the sheet (external marks added)
+                            return <TableCell key={`${rowIndex}-${colIdx}`}>{isFinishedByStaff ? result : ''}</TableCell>;
                           }
                         }
                         

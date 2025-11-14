@@ -19,6 +19,7 @@ interface Subject {
   id: string;
   subject_name: string;
   subject_code: string;
+  department_id: string | null;
 }
 
 interface Sheet {
@@ -110,14 +111,18 @@ const CoeSheets = () => {
       
       const { data, error } = await supabase
         .from('subjects')
-        .select('id, subject_name, subject_code')
-        .or(`department_id.eq.${selectedDepartment},department_id.is.null`)
+        .select('id, subject_name, subject_code, department_id')
         .order('subject_name', { ascending: true });
 
       if (error) {
         showError('Failed to fetch subjects.');
       } else {
-        setSubjects(data as Subject[]);
+        const allSubjects = (data || []) as Subject[];
+        // Only include subjects for the selected department and common subjects (department_id is null)
+        const filtered = allSubjects.filter(
+          (sub) => sub.department_id === selectedDepartment || sub.department_id === null
+        );
+        setSubjects(filtered);
       }
       setLoadingSubjects(false);
     };
