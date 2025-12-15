@@ -188,7 +188,7 @@ const SheetViewerDialog = ({
 
       // First shuffle the groups themselves, then shuffle the rows within each group.
       const shuffledGroups = shuffleArray(groups);
-      const shuffledData = shuffledGroups.map(group => shuffleArray([...group])).flat();
+      const shuffledData = shuffledGroups.flat();
       
       const updatedPresentStudents = shuffledData.map((row, index) => ({
         ...row,

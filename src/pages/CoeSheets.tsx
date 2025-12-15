@@ -63,7 +63,7 @@ const CoeSheets = () => {
   const [sheetDataForDownload, setSheetDataForDownload] = useState<Record<string, any>[]>([]);
 
   const fetchSheets = useCallback(async () => {
-    if (!selectedSubject) {
+    if (!selectedSubject || !selectedDepartment) {
       setSheets([]);
       return;
     }
@@ -72,6 +72,7 @@ const CoeSheets = () => {
       .from('sheets')
       .select('*, duplicates_generated, subjects(subject_code, subject_name), departments(department_name)')
       .eq('subject_id', selectedSubject)
+      .eq('department_id', selectedDepartment)
       .eq('attendance_marked', true)
       .order('created_at', { ascending: false});
     
@@ -81,7 +82,7 @@ const CoeSheets = () => {
       setSheets(data as Sheet[]);
     }
     setLoadingSheets(false);
-  }, [selectedSubject]);
+  }, [selectedSubject, selectedDepartment]);
 
   useEffect(() => {
     const fetchDepartments = async () => {
@@ -135,6 +136,11 @@ const CoeSheets = () => {
   }, [fetchSheets]);
 
   useEffect(() => {
+    // Only subscribe if we have filters selected
+    if (!selectedSubject || !selectedDepartment) {
+      return;
+    }
+
     const channel = supabase
       .channel('public-sheets-coe')
       .on(
@@ -149,7 +155,7 @@ const CoeSheets = () => {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [fetchSheets]);
+  }, [fetchSheets, selectedSubject, selectedDepartment]);
 
   const checkDateAvailability = (sheet: Sheet) => {
     const now = new Date();

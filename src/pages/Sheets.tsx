@@ -99,7 +99,7 @@ const Sheets = () => {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const fetchSheets = useCallback(async () => {
-    if (!selectedSubject) {
+    if (!selectedSubject || !selectedDepartment) {
       setSheets([]);
       return;
     }
@@ -108,6 +108,7 @@ const Sheets = () => {
       .from('sheets')
       .select('*')
       .eq('subject_id', selectedSubject)
+      .eq('department_id', selectedDepartment)
       .order('created_at', { ascending: false });
     
     if (error) {
@@ -116,7 +117,7 @@ const Sheets = () => {
       setSheets(data);
     }
     setLoadingSheets(false);
-  }, [selectedSubject]);
+  }, [selectedSubject, selectedDepartment]);
 
   useEffect(() => {
     const generateAcademicTerms = () => {
@@ -185,6 +186,11 @@ const Sheets = () => {
   }, [fetchSheets]);
 
   useEffect(() => {
+    // Only subscribe if we have filters selected
+    if (!selectedSubject || !selectedDepartment) {
+      return;
+    }
+
     const channel = supabase
       .channel('public-sheets-admin')
       .on(
@@ -199,7 +205,7 @@ const Sheets = () => {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [fetchSheets]);
+  }, [fetchSheets, selectedSubject, selectedDepartment]);
 
   const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -274,9 +280,12 @@ const Sheets = () => {
         
         // Populate in order
         orderedRow['register number'] = registerNumber;
-        orderedRow['roll number'] = registerNumber.length >= 4
-          ? registerNumber.slice(0, -4) + registerNumber.slice(-3)
-          : '';
+        orderedRow['roll number'] = 
+	 registerNumber.startsWith('6176')
+	   ? registerNumber
+	   : registerNumber.length>= 4
+	     ? registerNumber.slice(0,-4) + registerNumber.slice(-3)
+	     : '';
         orderedRow['subject code'] = subjectCode;
         orderedRow['internal mark'] = internalMark;
         orderedRow['attendance'] = '';

@@ -468,10 +468,10 @@ const channel = (channelName: string) => {
     },
 
     subscribe() {
-      // Poll every 5 seconds for changes
+      // Poll every 30 seconds for changes (reduced from 5s to prevent unnecessary refreshes during scrolling)
       intervalId = setInterval(() => {
         callbacks.forEach(cb => cb());
-      }, 5000);
+      }, 30000);
 
       return this;
     },

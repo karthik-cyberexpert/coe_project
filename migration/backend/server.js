@@ -46,24 +46,38 @@ const upload = multer({
 app.use(helmet());
 
 // CORS configuration - allow multiple origins
-const allowedOrigins = [
-  'http://localhost:5173',
-  'http://localhost:8080',
-  'http://localhost:3000',
-  process.env.FRONTEND_URL
-].filter(Boolean);
+// const allowedOrigins = [
+ // 'http://localhost:5173',
+  //'http://localhost:8081',
+ // 'http://localhost:3000',
+ // 'http://192.168.51.15:8083',
+// 'http://192.168.51.16:8081',
+// 'http://192.168.51.17:8081',
+//'http://192.168.51.18:8081',
+//'http://192.168.51.19:8081',
+//'http://192.168.51.20:8081',
+//'http://192.168.51.21:8081',
+//'http://192.168.51.15:8081',
+//'http://192.168.51.22:8081',
+//'http://192.168.51.23:8081',
+//'http://192.168.51.24:8081',
+//'http://192.168.51.25:8081',
+//  process.env.FRONTEND_URL
+//].filter(Boolean);
 
-app.use(cors({
-  origin: function (origin, callback) {
+//app.use(cors({
+  //origin: function (origin, callback) {
     // Allow requests with no origin (like mobile apps or curl requests)
-    if (!origin) return callback(null, true);
+   // if (!origin) return callback(null, true);
     
-    if (allowedOrigins.indexOf(origin) !== -1) {
-      callback(null, true);
-    } else {
-      callback(new Error('Not allowed by CORS'));
-    }
-  },
+   // if (allowedOrigins.indexOf(origin) !== -1) {
+    //  callback(null, true);
+   // } else {
+     // callback(new Error('Not allowed by CORS'));
+   // }
+  //},
+app.use(cors({
+origin: true,
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization']
@@ -774,8 +788,8 @@ app.delete('/api/subjects/:id', authenticateToken, requireRole('admin'), [
 // Get all sheets with relations
 app.get('/api/sheets', authenticateToken, async (req, res) => {
   try {
-    // Optional filters via query params (e.g., attendance_marked=true)
-    const { attendance_marked, duplicates_generated, external_marks_added, order, dir } = req.query;
+    // Optional filters via query params (e.g., attendance_marked=true, subject_id=..., department_id=...)
+    const { attendance_marked, duplicates_generated, external_marks_added, subject_id, department_id, order, dir } = req.query;
     const conditions = [];
     const params = [];
 
@@ -792,6 +806,8 @@ app.get('/api/sheets', authenticateToken, async (req, res) => {
     if (am !== undefined) { conditions.push('s.attendance_marked = ?'); params.push(am); }
     if (dg !== undefined) { conditions.push('s.duplicates_generated = ?'); params.push(dg); }
     if (em !== undefined) { conditions.push('s.external_marks_added = ?'); params.push(em); }
+    if (subject_id) { conditions.push('s.subject_id = ?'); params.push(subject_id); }
+    if (department_id) { conditions.push('s.department_id = ?'); params.push(department_id); }
 
     const whereClause = conditions.length ? ('WHERE ' + conditions.join(' AND ')) : '';
     const orderBy = ['created_at', 'updated_at'].includes(String(order)) ? String(order) : 'created_at';
