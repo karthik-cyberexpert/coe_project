@@ -2,6 +2,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { supabase } from "@/integrations/supabase/client";
+import { API_URL } from "@/lib/mysqlClient";
 import { Button } from "@/components/ui/button";
 import {
   Form,
@@ -51,7 +52,7 @@ const AddUserForm = ({ onSuccess }: AddUserFormProps) => {
         is_staff: values.role === "staff",
       };
 
-      const response = await fetch(`${import.meta.env.VITE_API_URL}/users`, {
+      const response = await fetch(`${API_URL}/users`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { API_URL } from "@/lib/mysqlClient";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -62,7 +63,7 @@ const UserManagement = () => {
     setLoading(true);
     try {
       const session = await supabase.auth.getSession();
-      const response = await fetch(`${import.meta.env.VITE_API_URL}/users`, {
+      const response = await fetch(`${API_URL}/users`, {
         headers: {
           'Authorization': `Bearer ${session.data.session?.access_token}`
         }
@@ -90,7 +91,7 @@ const UserManagement = () => {
 
     try {
       const session = await supabase.auth.getSession();
-      const response = await fetch(`${import.meta.env.VITE_API_URL}/users/${userToDelete.id}`, {
+      const response = await fetch(`${API_URL}/users/${userToDelete.id}`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${session.data.session?.access_token}`

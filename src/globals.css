@@ -4,89 +4,94 @@
 
 @layer base {
   :root {
+    /* Base - Clean White */
     --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
+    --foreground: 224 71.4% 4.1%; 
 
+    /* Cards - White with subtle projection */
     --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
-
+    --card-foreground: 224 71.4% 4.1%;
+ 
+    /* Popovers */
     --popover: 0 0% 100%;
-    --popover-foreground: 222.2 84% 4.9%;
-
-    --primary: 222.2 47.4% 11.2%;
+    --popover-foreground: 224 71.4% 4.1%;
+ 
+    /* Primary - Royal Indigo (Vibrant) */
+    --primary: 262.1 83.3% 57.8%; /* #6d28d9 (Violet-700) - Deep Vibrant Color */
     --primary-foreground: 210 40% 98%;
-
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
-
+ 
+    /* Secondary - Soft Lavender */
+    --secondary: 262.1 40% 96.1%;
+    --secondary-foreground: 262.1 47.4% 11.2%;
+ 
+    /* Muted - Cool Grays */
     --muted: 210 40% 96.1%;
     --muted-foreground: 215.4 16.3% 46.9%;
-
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 222.2 47.4% 11.2%;
-
+ 
+    /* Accent - For Hover States (Light Violet) */
+    --accent: 262.1 60% 95%; 
+    --accent-foreground: 262.1 47.4% 11.2%;
+ 
+    /* Destructive - Soft Red */
     --destructive: 0 84.2% 60.2%;
     --destructive-foreground: 210 40% 98%;
 
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 222.2 84% 4.9%;
-
-    --radius: 0.5rem;
-
-    --sidebar-background: 0 0% 98%;
-
+    /* Borders & Inputs */
+    --border: 220 13% 91%; 
+    --input: 220 13% 91%;
+    --ring: 262.1 83.3% 57.8%;
+ 
+    --radius: 0.75rem; /* Larger border radius for modern feel */
+ 
+    /* Sidebar - Deep Rich Dark Mode Look for Contrast or Light Clean */
+    /* Let's go with a Light but Tinted Sidebar for "Clean" look */
+    --sidebar-background: 265 50% 99%; /* Very faint violet tint */
     --sidebar-foreground: 240 5.3% 26.1%;
-
-    --sidebar-primary: 240 5.9% 10%;
-
+    --sidebar-primary: 262.1 83.3% 57.8%;
     --sidebar-primary-foreground: 0 0% 98%;
-
-    --sidebar-accent: 240 4.8% 95.9%;
-
-    --sidebar-accent-foreground: 240 5.9% 10%;
-
+    --sidebar-accent: 262.1 60% 95%; /* Light Violet Hover */
+    --sidebar-accent-foreground: 262.1 83.3% 57.8%; /* Dark Violet Text */
     --sidebar-border: 220 13% 91%;
-
-    --sidebar-ring: 217.2 91.2% 59.8%;
+    --sidebar-ring: 262.1 83.3% 57.8%;
   }
-
+ 
   .dark {
-    --background: 222.2 84% 4.9%;
+    --background: 224 71.4% 4.1%;
     --foreground: 210 40% 98%;
-
-    --card: 222.2 84% 4.9%;
+ 
+    --card: 224 71.4% 4.1%;
     --card-foreground: 210 40% 98%;
-
-    --popover: 222.2 84% 4.9%;
+ 
+    --popover: 224 71.4% 4.1%;
     --popover-foreground: 210 40% 98%;
-
-    --primary: 210 40% 98%;
-    --primary-foreground: 222.2 47.4% 11.2%;
-
+ 
+    --primary: 263.4 70% 50.4%;
+    --primary-foreground: 210 40% 98%;
+ 
     --secondary: 217.2 32.6% 17.5%;
     --secondary-foreground: 210 40% 98%;
-
+ 
     --muted: 217.2 32.6% 17.5%;
     --muted-foreground: 215 20.2% 65.1%;
-
+ 
     --accent: 217.2 32.6% 17.5%;
     --accent-foreground: 210 40% 98%;
-
+ 
     --destructive: 0 62.8% 30.6%;
     --destructive-foreground: 210 40% 98%;
-
+ 
     --border: 217.2 32.6% 17.5%;
     --input: 217.2 32.6% 17.5%;
-    --ring: 212.7 26.8% 83.9%;
-    --sidebar-background: 240 5.9% 10%;
+    --ring: 263.4 70% 50.4%;
+    
+    --sidebar-background: 224 71.4% 4.1%;
     --sidebar-foreground: 240 4.8% 95.9%;
-    --sidebar-primary: 224.3 76.3% 48%;
+    --sidebar-primary: 263.4 70% 50.4%;
     --sidebar-primary-foreground: 0 0% 100%;
     --sidebar-accent: 240 3.7% 15.9%;
     --sidebar-accent-foreground: 240 4.8% 95.9%;
     --sidebar-border: 240 3.7% 15.9%;
-    --sidebar-ring: 217.2 91.2% 59.8%;
+    --sidebar-ring: 263.4 70% 50.4%;
   }
 }
 

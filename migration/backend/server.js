@@ -472,8 +472,170 @@ app.post('/api/auth/refresh', [
 });
 
 // ==============================================
-// DEPARTMENTS ENDPOINTS
+// USER MANAGEMENT ENDPOINTS
 // ==============================================
+
+// Get all users
+app.get('/api/users', authenticateToken, requireRole('admin'), async (req, res) => {
+  try {
+    const [rows] = await pool.execute(
+      `SELECT u.id, u.email, u.email_verified, u.created_at, u.last_sign_in_at,
+              p.full_name, p.is_admin, p.is_ceo, p.is_sub_admin, p.is_staff
+       FROM users u
+       LEFT JOIN profiles p ON u.id = p.id
+       ORDER BY u.created_at DESC`
+    );
+    res.json(rows);
+  } catch (err) {
+    console.error('Get users error:', err);
+    res.status(500).json({ error: 'Failed to fetch users' });
+  }
+});
+
+// Create user
+app.post('/api/users', authenticateToken, requireRole('admin'), [
+  body('email').isEmail().normalizeEmail(),
+  body('password').isLength({ min: 8 }),
+  body('full_name').notEmpty().trim(),
+  body('is_admin').isBoolean(),
+  body('is_ceo').isBoolean(),
+  body('is_sub_admin').isBoolean(),
+  body('is_staff').isBoolean()
+], async (req, res) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    return res.status(400).json({ errors: errors.array() });
+  }
+
+  const { email, password, full_name, is_admin, is_ceo, is_sub_admin, is_staff } = req.body;
+  const connection = await pool.getConnection();
+
+  try {
+    await connection.beginTransaction();
+
+    // Check existing
+    const [existing] = await connection.execute('SELECT id FROM users WHERE email = ?', [email]);
+    if (existing.length > 0) {
+      await connection.rollback();
+      return res.status(400).json({ error: 'Email already exists' });
+    }
+
+    // Create user
+    const password_hash = await bcrypt.hash(password, 10);
+    await connection.execute(
+      `INSERT INTO users (email, password_hash, raw_user_meta_data) VALUES (?, ?, ?)`,
+      [email, password_hash, JSON.stringify({ full_name })]
+    );
+
+    const [userRows] = await connection.execute('SELECT id FROM users WHERE email = ?', [email]);
+    const userId = userRows[0].id;
+
+    // Trigger creates profile, but we need to update roles
+    // Wait a tiny bit for trigger or just update directly (transaction might block trigger if not careful, 
+    // but in MySQL triggers run within same transaction usually. 
+    // Let's UPDATE profile assuming trigger ran or just INSERT ON DUPLICATE)
+    
+    // Actually, usually triggers run before commit.
+    await connection.execute(
+      `UPDATE profiles SET is_admin=?, is_ceo=?, is_sub_admin=?, is_staff=?, full_name=? WHERE id=?`,
+      [is_admin, is_ceo, is_sub_admin, is_staff, full_name, userId]
+    );
+
+    await connection.commit();
+    res.status(201).json({ message: 'User created successfully', id: userId });
+  } catch (err) {
+    await connection.rollback();
+    console.error('Create user error:', err);
+    res.status(500).json({ error: 'Failed to create user' });
+  } finally {
+    connection.release();
+  }
+});
+
+// Update user
+app.put('/api/users/:id', authenticateToken, requireRole('admin'), [
+  param('id').matches(UUID_LIKE),
+  body('email').optional().isEmail(),
+  body('full_name').optional().trim(),
+  body('password').optional().isLength({ min: 8 }) // Optional password update
+], async (req, res) => {
+  const { id } = req.params;
+  const { email, full_name, password, is_admin, is_ceo, is_sub_admin, is_staff } = req.body;
+
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
+
+    // Update User table (email, password)
+    if (email || password) {
+      const updates = [];
+      const values = [];
+      
+      if (email) {
+        updates.push('email = ?');
+        values.push(email);
+      }
+      if (password) {
+        const hash = await bcrypt.hash(password, 10);
+        updates.push('password_hash = ?');
+        values.push(hash);
+      }
+      
+      if (updates.length > 0) {
+        values.push(id);
+        await connection.execute(`UPDATE users SET ${updates.join(', ')} WHERE id = ?`, values);
+      }
+    }
+
+    // Update Profile table (roles, full_name)
+    // Only update fields that are provided
+    const profileUpdates = [];
+    const profileValues = [];
+
+    if (full_name !== undefined) { profileUpdates.push('full_name = ?'); profileValues.push(full_name); }
+    if (is_admin !== undefined) { profileUpdates.push('is_admin = ?'); profileValues.push(is_admin); }
+    if (is_ceo !== undefined) { profileUpdates.push('is_ceo = ?'); profileValues.push(is_ceo); }
+    if (is_sub_admin !== undefined) { profileUpdates.push('is_sub_admin = ?'); profileValues.push(is_sub_admin); }
+    if (is_staff !== undefined) { profileUpdates.push('is_staff = ?'); profileValues.push(is_staff); }
+
+    if (profileUpdates.length > 0) {
+      profileValues.push(id);
+      await connection.execute(
+        `UPDATE profiles SET ${profileUpdates.join(', ')} WHERE id = ?`,
+        profileValues
+      );
+    }
+
+    await connection.commit();
+    res.json({ message: 'User updated successfully' });
+  } catch (err) {
+    await connection.rollback();
+    console.error('Update user error:', err);
+    res.status(500).json({ error: 'Failed to update user' });
+  } finally {
+    connection.release();
+  }
+});
+
+// Delete user
+app.delete('/api/users/:id', authenticateToken, requireRole('admin'), [
+  param('id').matches(UUID_LIKE)
+], async (req, res) => {
+  const { id } = req.params;
+  
+  // Prevent deleting self
+  if (id === req.user.id) {
+    return res.status(400).json({ error: 'Cannot delete your own account' });
+  }
+
+  try {
+    await pool.execute('DELETE FROM users WHERE id = ?', [id]);
+    res.json({ message: 'User deleted successfully' });
+  } catch (err) {
+    console.error('Delete user error:', err);
+    res.status(500).json({ error: 'Failed to delete user' });
+  }
+});
 
 // Get all departments
 app.get('/api/departments', authenticateToken, async (req, res) => {

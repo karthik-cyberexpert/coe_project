@@ -48,7 +48,7 @@ const Sidebar = ({ user, profile, onSignOut }: SidebarProps) => {
   console.log('🎨 Sidebar - is_staff:', profile.is_staff);
   
   return (
-    <aside className="w-64 h-screen bg-gray-100 border-r flex flex-col flex-shrink-0">
+    <aside className="w-64 h-screen bg-sidebar border-r border-sidebar-border flex flex-col flex-shrink-0 text-sidebar-foreground">
       <UserProfile user={user} profile={profile} onSignOut={onSignOut} />
       <nav className="flex-1 p-4 space-y-2">
         {commonNavItems.map((item) => (
@@ -57,13 +57,19 @@ const Sidebar = ({ user, profile, onSignOut }: SidebarProps) => {
             to={item.href}
             end
             className={({ isActive }) =>
-              `flex items-center px-3 py-2 text-gray-700 rounded-md hover:bg-gray-200 ${
-                isActive ? "bg-gray-300 font-semibold" : ""
+              `flex items-center px-3 py-2 rounded-md transition-colors duration-200 ${
+                isActive 
+                  ? "bg-sidebar-primary text-sidebar-primary-foreground font-medium shadow-sm" 
+                  : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
               }`
             }
           >
-            <item.icon className="w-5 h-5 mr-3" />
-            {item.label}
+            {({ isActive }) => (
+              <>
+                <item.icon className={`w-5 h-5 mr-3 ${isActive ? "text-sidebar-primary-foreground" : "text-sidebar-foreground/70"}`} />
+                {item.label}
+              </>
+            )}
           </NavLink>
         ))}
         {profile.is_admin && (
@@ -72,13 +78,19 @@ const Sidebar = ({ user, profile, onSignOut }: SidebarProps) => {
               key={item.href}
               to={item.href}
               className={({ isActive }) =>
-                `flex items-center px-3 py-2 text-gray-700 rounded-md hover:bg-gray-200 ${
-                  isActive ? "bg-gray-300 font-semibold" : ""
+                `flex items-center px-3 py-2 rounded-md transition-colors duration-200 ${
+                  isActive 
+                    ? "bg-sidebar-primary text-sidebar-primary-foreground font-medium shadow-sm" 
+                    : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
                 }`
               }
             >
-              <item.icon className="w-5 h-5 mr-3" />
-              {item.label}
+              {({ isActive }) => (
+                <>
+                  <item.icon className={`w-5 h-5 mr-3 ${isActive ? "text-sidebar-primary-foreground" : "text-sidebar-foreground/70"}`} />
+                  {item.label}
+                </>
+              )}
             </NavLink>
           ))
         )}
@@ -88,13 +100,19 @@ const Sidebar = ({ user, profile, onSignOut }: SidebarProps) => {
               key={item.href}
               to={item.href}
               className={({ isActive }) =>
-                `flex items-center px-3 py-2 text-gray-700 rounded-md hover:bg-gray-200 ${
-                  isActive ? "bg-gray-300 font-semibold" : ""
+                `flex items-center px-3 py-2 rounded-md transition-colors duration-200 ${
+                  isActive 
+                    ? "bg-sidebar-primary text-sidebar-primary-foreground font-medium shadow-sm" 
+                    : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
                 }`
               }
             >
-              <item.icon className="w-5 h-5 mr-3" />
-              {item.label}
+              {({ isActive }) => (
+                <>
+                  <item.icon className={`w-5 h-5 mr-3 ${isActive ? "text-sidebar-primary-foreground" : "text-sidebar-foreground/70"}`} />
+                  {item.label}
+                </>
+              )}
             </NavLink>
           ))
         )}
@@ -104,13 +122,19 @@ const Sidebar = ({ user, profile, onSignOut }: SidebarProps) => {
               key={item.href}
               to={item.href}
               className={({ isActive }) =>
-                `flex items-center px-3 py-2 text-gray-700 rounded-md hover:bg-gray-200 ${
-                  isActive ? "bg-gray-300 font-semibold" : ""
+                `flex items-center px-3 py-2 rounded-md transition-colors duration-200 ${
+                  isActive 
+                    ? "bg-sidebar-primary text-sidebar-primary-foreground font-medium shadow-sm" 
+                    : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
                 }`
               }
             >
-              <item.icon className="w-5 h-5 mr-3" />
-              {item.label}
+              {({ isActive }) => (
+                <>
+                  <item.icon className={`w-5 h-5 mr-3 ${isActive ? "text-sidebar-primary-foreground" : "text-sidebar-foreground/70"}`} />
+                  {item.label}
+                </>
+              )}
             </NavLink>
           ))
         )}
@@ -120,13 +144,19 @@ const Sidebar = ({ user, profile, onSignOut }: SidebarProps) => {
               key={item.href}
               to={item.href}
               className={({ isActive }) =>
-                `flex items-center px-3 py-2 text-gray-700 rounded-md hover:bg-gray-200 ${
-                  isActive ? "bg-gray-300 font-semibold" : ""
+                `flex items-center px-3 py-2 rounded-md transition-colors duration-200 ${
+                  isActive 
+                    ? "bg-sidebar-primary text-sidebar-primary-foreground font-medium shadow-sm" 
+                    : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
                 }`
               }
             >
-              <item.icon className="w-5 h-5 mr-3" />
-              {item.label}
+              {({ isActive }) => (
+                <>
+                  <item.icon className={`w-5 h-5 mr-3 ${isActive ? "text-sidebar-primary-foreground" : "text-sidebar-foreground/70"}`} />
+                  {item.label}
+                </>
+              )}
             </NavLink>
           ))
         )}
