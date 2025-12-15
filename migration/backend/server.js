@@ -170,7 +170,7 @@ const ipWhitelistMiddleware = async (req, res, next) => {
 };
 
 // Apply IP whitelist to all routes (except explicitly skipped ones)
-app.use(ipWhitelistMiddleware);
+// app.use(ipWhitelistMiddleware);
 
 // ==============================================
 // AUTH MIDDLEWARE
