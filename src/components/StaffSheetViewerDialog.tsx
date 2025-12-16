@@ -7,6 +7,16 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
   Table,
   TableBody,
   TableCell,
@@ -53,6 +63,7 @@ const StaffSheetViewerDialog = ({ isOpen, onClose, sheet, sheetData, forceEditab
   const [bundleOptions, setBundleOptions] = useState<string[]>([]);
   const [selectedBundle, setSelectedBundle] = useState<string>('');
   const [editedData, setEditedData] = useState<Record<string, any>[]>([]);
+  const [showSaveConfirmation, setShowSaveConfirmation] = useState(false);
   
   const [isSaving, setIsSaving] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -227,7 +238,7 @@ const StaffSheetViewerDialog = ({ isOpen, onClose, sheet, sheetData, forceEditab
             // Set view based on whether bundle is finalized or entire sheet is finalized
             const isSheetFinalized = !!sheet?.external_marks_added;
             // Treat bundle as finalized if we have a direct match OR any examiner row for this sheet.
-            const isBundleFinalized = !!matched || !!fallbackExaminer;
+            const isBundleFinalized = !!matched;
             // Once a bundle is saved (has examiner details), it should NEVER be editable again for staff
             // forceEditable only applies to sheet-level finalization (for admins), not bundle-level
             const shouldBeReadOnly = isBundleFinalized || (isSheetFinalized && !forceEditable);
@@ -281,7 +292,7 @@ const StaffSheetViewerDialog = ({ isOpen, onClose, sheet, sheetData, forceEditab
     setEditedData(newData);
   };
 
-  const handleSaveChanges = async () => {
+  const handleSaveClick = () => {
     if (!sheet || !duplicateNumberKey) return;
     
     // Check if bundle is already finalized
@@ -295,6 +306,14 @@ const StaffSheetViewerDialog = ({ isOpen, onClose, sheet, sheetData, forceEditab
       showError('This sheet is finalized and cannot be edited.');
       return;
     }
+
+    setShowSaveConfirmation(true);
+  };
+
+  const performSave = async () => {
+    setShowSaveConfirmation(false);
+    if (!sheet || !duplicateNumberKey) return;
+    
     setIsSaving(true);
     const toastId = showLoading("Saving marks...");
     try {
@@ -607,7 +626,7 @@ const StaffSheetViewerDialog = ({ isOpen, onClose, sheet, sheetData, forceEditab
                                       type="number"
                                       min="0"
                                       max={maxMark}
-                                      value={row[key] || ''}
+                                      value={row[key] ?? ''}
                                       onChange={(e) => handleMarkChange(rowIndex, key, idx + 1, e.target.value)}
                                       className="w-20"
                                       disabled={isReadOnly || view === 'submitted' || !!examinerDetails}
@@ -638,7 +657,7 @@ const StaffSheetViewerDialog = ({ isOpen, onClose, sheet, sheetData, forceEditab
                     <Button onClick={handleDownloadPdf} disabled={editedData.length === 0}>Download PDF</Button>
                   </div>
                 ) : (
-                  <Button onClick={handleSaveChanges} disabled={isSaving || editedData.length === 0 || isReadOnly || !!examinerDetails}>
+                  <Button onClick={handleSaveClick} disabled={isSaving || editedData.length === 0 || isReadOnly || !!examinerDetails}>
                     {isSaving ? 'Saving...' : 'Save & Finalize'}
                   </Button>
                 )}
@@ -647,6 +666,24 @@ const StaffSheetViewerDialog = ({ isOpen, onClose, sheet, sheetData, forceEditab
           )}
         </DialogContent>
       </Dialog>
+
+      <AlertDialog open={showSaveConfirmation} onOpenChange={setShowSaveConfirmation}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Save Bundle {selectedBundle}?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to save marks for <strong>Bundle {selectedBundle}</strong>?
+              <br /><br />
+              This will update the sheet and allow you to enter examiner details for this bundle.
+              Other bundles will remain editable.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={performSave}>Confirm Save</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {sheet && selectedBundle && (
         <ExaminerDetailsDialog
