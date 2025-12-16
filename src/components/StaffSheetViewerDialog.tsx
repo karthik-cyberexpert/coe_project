@@ -346,7 +346,8 @@ const StaffSheetViewerDialog = ({ isOpen, onClose, sheet, sheetData, forceEditab
           // Sum marks; treat empty/NaN as 0
           const total = internalMarkKeys.reduce((sum, key) => {
             const v = row[key];
-            const n = typeof v === 'number' ? v : parseInt(String(v ?? '').trim() || '0', 10);
+            const valStr = String(v ?? '').trim();
+            const n = valStr === '' ? 0 : parseInt(valStr, 10);
             return sum + (isNaN(n) ? 0 : n);
           }, 0);
           return { ...row, [totalKey]: total };

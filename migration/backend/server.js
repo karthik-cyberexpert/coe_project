@@ -87,16 +87,17 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 // Rate limiting
+// Rate limiting
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100 // limit each IP to 100 requests per windowMs
+  max: 100000 // limit each IP to 100,000 requests (supports 200+ concurrent users sharing IP)
 });
 app.use('/api/', limiter);
 
 // Strict rate limiting for auth endpoints
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 5 // only 5 requests per 15 minutes
+  max: 5000 // 5000 attempts per 15 min (allows mass login from lab/campus IP)
 });
 
 // ==============================================
@@ -901,7 +902,11 @@ app.put('/api/subjects/:id', authenticateToken, requireRole('admin'), [
   param('id').matches(UUID_LIKE),
   body('subject_code').optional().trim(),
   body('subject_name').optional().trim(),
-  body('department_id').optional().matches(UUID_LIKE)
+  body('department_id').custom((value) => {
+    if (value === null) return true;
+    if (value === undefined) return true;
+    return UUID_LIKE.test(value);
+  }),
 ], async (req, res) => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) {

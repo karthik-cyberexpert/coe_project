@@ -197,7 +197,19 @@ const SheetViewerDialog = ({
 
       const updatedData = [...updatedPresentStudents, ...absentOrNilStudents];
 
-      const newWorksheet = XLSX.utils.json_to_sheet(updatedData);
+      if (updatedData.length === 0) {
+        throw new Error("Resulting data is empty. Cannot save.");
+      }
+
+      // Explicitly gather all unique keys to ensure no columns are lost
+      const allKeys = new Set<string>();
+      updatedData.forEach(row => Object.keys(row).forEach(k => allKeys.add(k)));
+      // Ensure 'duplicate number' is in the list
+      if (duplicateNumberKey) allKeys.add(duplicateNumberKey);
+      
+      const headerList = Array.from(allKeys);
+
+      const newWorksheet = XLSX.utils.json_to_sheet(updatedData, { header: headerList });
       const newWorkbook = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(newWorkbook, newWorksheet, 'Sheet1');
       const wbout = XLSX.write(newWorkbook, { bookType: 'xlsx', type: 'array' });
