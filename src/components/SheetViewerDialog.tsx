@@ -160,13 +160,13 @@ const SheetViewerDialog = ({
       const attendanceKey = sheetData.length > 0 ? Object.keys(sheetData[0]).find(k => k.toLowerCase() === 'attendance') : undefined;
       const duplicateNumberKey = (sheetData.length > 0 && Object.keys(sheetData[0]).find(k => k.toLowerCase().replace(/\s/g, '') === 'duplicatenumber')) || 'duplicate number';
 
+      // Strict filtering: Only rows strictly marked 'Present' get a number.
+      // If attendance is missing/empty, they are treated as Absent.
       const presentStudents = attendanceKey 
-        ? sheetData.filter(row => String(row[attendanceKey]).trim().toLowerCase() === 'present')
-        : [...sheetData];
-      
-      const absentOrNilStudents = attendanceKey
-        ? sheetData.filter(row => String(row[attendanceKey]).trim().toLowerCase() !== 'present')
+        ? sheetData.filter(row => String(row[attendanceKey] || '').trim().toLowerCase() === 'present')
         : [];
+      
+      const absentOrNilStudents = sheetData.filter(row => !presentStudents.includes(row));
 
       const dataToShuffle = [...presentStudents];
 
@@ -194,6 +194,15 @@ const SheetViewerDialog = ({
         ...row,
         [duplicateNumberKey]: startingNum + index,
       }));
+
+      // If no students are present, warn the user (optional, but good UX)
+      if (updatedPresentStudents.length === 0 && sheetData.length > 0) {
+        showError("No students are marked 'Present'. Please mark attendance first.");
+        setIsSaving(false);
+        dismissToast(String(toastId));
+        return;
+      }
+
 
       const updatedData = [...updatedPresentStudents, ...absentOrNilStudents];
 
