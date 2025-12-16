@@ -241,7 +241,8 @@ const StaffSheetViewerDialog = ({ isOpen, onClose, sheet, sheetData, forceEditab
             const isBundleFinalized = !!matched;
             // Once a bundle is saved (has examiner details), it should NEVER be editable again for staff
             // forceEditable only applies to sheet-level finalization (for admins), not bundle-level
-            const shouldBeReadOnly = isBundleFinalized || (isSheetFinalized && !forceEditable);
+            // ADMIN OVERRIDE: If forceEditable is true, allow editing even if confirmed (except locked fields)
+            const shouldBeReadOnly = !forceEditable && (isBundleFinalized || isSheetFinalized);
             
             if (shouldBeReadOnly) {
                 console.log('[StaffSheetViewerDialog] READ-ONLY MODE ACTIVATED');
@@ -433,7 +434,7 @@ const StaffSheetViewerDialog = ({ isOpen, onClose, sheet, sheetData, forceEditab
         chief_college: '-',
     };
 
-    const doc = new jsPDF('landscape'); // Landscape for more columns
+    const doc = new jsPDF('portrait'); // Portrait mode as requested
     
     // Header
     doc.setFont('helvetica', 'bold');
@@ -629,8 +630,8 @@ const StaffSheetViewerDialog = ({ isOpen, onClose, sheet, sheetData, forceEditab
                                       value={row[key] ?? ''}
                                       onChange={(e) => handleMarkChange(rowIndex, key, idx + 1, e.target.value)}
                                       className="w-20"
-                                      disabled={isReadOnly || view === 'submitted' || !!examinerDetails}
-                                      readOnly={isReadOnly || view === 'submitted' || !!examinerDetails}
+                                      disabled={!forceEditable && (isReadOnly || view === 'submitted' || !!examinerDetails)}
+                                      readOnly={!forceEditable && (isReadOnly || view === 'submitted' || !!examinerDetails)}
                                     />
                                   </TableCell>
                                 );
@@ -657,7 +658,7 @@ const StaffSheetViewerDialog = ({ isOpen, onClose, sheet, sheetData, forceEditab
                     <Button onClick={handleDownloadPdf} disabled={editedData.length === 0}>Download PDF</Button>
                   </div>
                 ) : (
-                  <Button onClick={handleSaveClick} disabled={isSaving || editedData.length === 0 || isReadOnly || !!examinerDetails}>
+                  <Button onClick={handleSaveClick} disabled={isSaving || editedData.length === 0 || (!forceEditable && (isReadOnly || !!examinerDetails))}>
                     {isSaving ? 'Saving...' : 'Save & Finalize'}
                   </Button>
                 )}

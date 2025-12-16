@@ -34,6 +34,7 @@ interface Sheet {
   file_path: string;
   created_at: string;
   attendance_marked?: boolean;
+  duplicates_generated?: boolean;
 }
 
 interface EditableSheetViewerDialogProps {
@@ -134,7 +135,9 @@ const EditableSheetViewerDialog = ({ isOpen, onClose, sheet, sheetData, forceEdi
 
   if (!sheet || !sheetData) return null;
   
-  const isReadOnly = sheet.attendance_marked && !forceEditable;
+  // If duplicates are generated, attendance is PERMANENTLY locked for everyone (including admins)
+  const isDuplicatesGenerated = !!sheet.duplicates_generated;
+  const isReadOnly = isDuplicatesGenerated || (sheet.attendance_marked && !forceEditable);
 
   if (sheetData.length === 0) {
     return (
@@ -147,6 +150,7 @@ const EditableSheetViewerDialog = ({ isOpen, onClose, sheet, sheetData, forceEdi
     );
   }
 
+
   // Sub-admin attendance marking: Only show Register Number and Attendance
   const displayHeaders = [registerNumberKey, attendanceKey].filter(Boolean) as string[];
 
@@ -155,7 +159,14 @@ const EditableSheetViewerDialog = ({ isOpen, onClose, sheet, sheetData, forceEdi
       <DialogContent className="sm:max-w-[95vw] max-h-[90vh] flex flex-col">
         <DialogHeader><DialogTitle>{sheet.sheet_name}</DialogTitle></DialogHeader>
         
-        <div className="flex justify-end gap-2 mb-4">
+        <div className="flex justify-between items-center mb-4">
+          <div className="text-sm font-medium">
+            {isDuplicatesGenerated && (
+              <span className="text-red-600 bg-red-50 px-2 py-1 rounded border border-red-200">
+                Attendance locked: Duplicates already generated.
+              </span>
+            )}
+          </div>
           <div className="flex items-center gap-2">
             <Label htmlFor="bulk-attendance-select" className="text-sm font-medium text-gray-700">Bulk Action:</Label>
             <Select onValueChange={handleBulkAttendance} value={bulkAction} disabled={isReadOnly || isSaving}>

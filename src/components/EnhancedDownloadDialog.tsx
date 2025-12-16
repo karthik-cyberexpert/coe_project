@@ -45,6 +45,7 @@ export const EnhancedDownloadDialog = ({
       const subjectCodeKey = allKeys.find(k => norm(k) === 'subjectcode');
       const attendanceKey = allKeys.find(k => norm(k) === 'attendance');
       const duplicateNumberKey = allKeys.find(k => norm(k) === 'duplicatenumber');
+      const bundleNumberKey = allKeys.find(k => norm(k) === 'bundlenumber');
       const totalKey = allKeys.find(k => norm(k) === 'total');
       const internalMarkKey = allKeys.find(k => ['internalmark','internalmarks','internal'].includes(norm(k)));
       const twoMarksColumnKey = allKeys.find(k => norm(k) === '2marks');
@@ -81,6 +82,7 @@ export const EnhancedDownloadDialog = ({
       add(internalMarkKey);
       add(attendanceKey);
       add(duplicateNumberKey);
+      add(bundleNumberKey);
       
       // Add individual mark columns 1..15 in order
       questionMarkKeys.forEach(k => add(k));

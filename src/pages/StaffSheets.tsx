@@ -25,10 +25,13 @@ export interface Sheet {
   sheet_name: string;
   file_path: string;
   created_at: string;
-  external_marks_added: boolean;
-  year: string | null;
-  batch: string | null;
-  subjects: {
+  external_marks_added?: boolean;
+  year?: string | null;
+  batch?: string | null;
+  maximum_internal_mark?: number | null;
+  duplicates_generated?: boolean;
+  attendance_marked?: boolean;
+  subjects?: {
     subject_code: string;
     subject_name: string;
   } | null;
