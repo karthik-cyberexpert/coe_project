@@ -19,6 +19,7 @@ import SubAdminSheets from "./pages/SubAdminSheets";
 import StaffProtectedRoute from "./components/StaffProtectedRoute";
 import StaffSheets from "./pages/StaffSheets";
 import UserManagement from "./pages/UserManagement";
+import CompletedSheets from "./pages/CompletedSheets";
 
 const queryClient = new QueryClient();
 
@@ -38,6 +39,7 @@ const App = () => (
               <Route path="/sheets" element={<Sheets />} />
               <Route path="/subjects" element={<Subjects />} />
               <Route path="/users" element={<UserManagement />} />
+              <Route path="/completed-sheets" element={<CompletedSheets />} />
             </Route>
             <Route element={<CoeProtectedRoute />}>
               <Route path="/coe-sheets" element={<CoeSheets />} />

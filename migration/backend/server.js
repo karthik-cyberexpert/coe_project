@@ -14,6 +14,7 @@ const rateLimit = require('express-rate-limit');
 const multer = require('multer');
 const fs = require('fs').promises;
 const path = require('path');
+const XLSX = require('xlsx');
 require('dotenv').config();
 
 // Accept UUID-like (v1/v3/v4/v5) strings of 36 chars with hyphens
@@ -1007,6 +1008,7 @@ app.get('/api/sheets', authenticateToken, async (req, res) => {
       attendance_marked: row.attendance_marked,
       duplicates_generated: row.duplicates_generated,
       external_marks_added: row.external_marks_added,
+      is_downloaded: !!row.is_downloaded,
       year: row.year,
       batch: row.batch,
       departments: row.department_id ? {
@@ -1921,6 +1923,284 @@ app.get('/health', (req, res) => {
 // ERROR HANDLERS
 // ==============================================
 
+
+
+// ==============================================
+// BULK ARCHIVAL ENDPOINT (Admin)
+// ==============================================
+
+const { exec } = require('child_process');
+
+const getRemovableDrive = () => {
+  return new Promise((resolve, reject) => {
+    // wmic logicaldisk where "drivetype=2" get deviceid
+    exec('wmic logicaldisk where "drivetype=2" get deviceid', (error, stdout, stderr) => {
+      if (error) {
+        console.error(`wmic error: ${error.message}`);
+        return resolve(null);
+      }
+      if (stderr) {
+        console.error(`wmic stderr: ${stderr}`);
+        return resolve(null);
+      }
+      // Parse Output:
+      // DeviceID  
+      // D:        
+      const lines = stdout.trim().split('\n').map(l => l.trim()).filter(l => l && l !== 'DeviceID');
+      if (lines.length > 0) {
+        resolve(lines[0]); // Return the first detected removable drive (e.g., "D:")
+      } else {
+        resolve(null);
+      }
+    });
+  });
+};
+
+app.post('/api/admin/bulk-archive', authenticateToken, requireRole('admin'), async (req, res) => {
+  try {
+    const connection = await pool.getConnection();
+
+    // 1. Fetch all completed but not downloaded sheets
+    const [sheets] = await connection.execute(`
+      SELECT s.*, d.department_name, sub.subject_name 
+      FROM sheets s 
+      LEFT JOIN departments d ON s.department_id = d.id
+      LEFT JOIN subjects sub ON s.subject_id = sub.id
+      WHERE s.external_marks_added = true 
+      AND (s.is_downloaded = false OR s.is_downloaded IS NULL)
+    `);
+
+    if (sheets.length === 0) {
+      connection.release();
+      return res.json({ success: true, message: 'No new sheets to archive.', count: 0 });
+    }
+
+    // DYNAMIC REQUIREMENT: Detect Flash Drive
+    const driveLetter = await getRemovableDrive(); // e.g., "D:" or "E:" or null
+
+    if (!driveLetter) {
+        connection.release();
+        return res.status(400).json({ 
+          success: false, 
+          error: "No Removable Flash Drive detected. Please insert a USB drive to archive sheets." 
+        });
+    }
+
+    const publicDir = path.join(driveLetter, 'COE', 'Sheets');
+    console.log(`Archiving to detected drive: ${publicDir}`);
+    
+    let archivedCount = 0;
+
+    for (const sheet of sheets) {
+      try {
+        // Read file from storage
+         // We need to read the file from storage
+         // FIX: Use full relative path, not just basename, as files are in subdirectories
+        const storagePath = path.join(STORAGE_DIR, sheet.file_path);
+        // Check if file exists
+        try {
+          await fs.access(storagePath);
+        } catch (e) {
+          console.error(`File missing for sheet ${sheet.id}: ${storagePath}`);
+          continue;
+        }
+
+        const fileBuffer = await fs.readFile(storagePath);
+
+        // PROCESS WORKBOOK to inject Bundle Number
+        let finalBuffer = fileBuffer;
+        try {
+            const workbook = XLSX.read(fileBuffer, { type: 'buffer' });
+            const sheetName = workbook.SheetNames[0];
+            const worksheet = workbook.Sheets[sheetName];
+            let jsonData = XLSX.utils.sheet_to_json(worksheet, { defval: "" }); // defval to keep empty cols if needed, but we want to clean _empty
+
+            if (jsonData.length > 0) {
+                 // 1. Pre-process to clean keys and inject Bundle Number
+                 const processedData = jsonData.map((row, index) => {
+                     const newRow = {};
+                     Object.keys(row).forEach(key => {
+                         if (key === '_empty' || key === '__EMPTY') return; // Skip empty bits
+                         newRow[key] = row[key];
+                     });
+                     
+                     // Helper to find key case-insensitively
+                     const findKey = (target) => Object.keys(newRow).find(k => k.toLowerCase().replace(/\s/g, '') === target.toLowerCase());
+
+                     // Inject Bundle Number
+                     const bundleKey = findKey('bundlenumber') || 'Bundle Number';
+                     if (!newRow[bundleKey]) {
+                         const duplicateKey = findKey('duplicatenumber') || findKey('dummynumber');
+                         // If duplicate number exists, try to place near it (conceptually), 
+                         // but we will enforce order later regardless.
+                         newRow['Bundle Number'] = `${sheet.subjects?.subject_code || 'SUB'}-${String(Math.ceil((index + 1) / 20)).padStart(2, '0')}`;
+                     }
+                     return newRow;
+                 });
+
+                 // 2. Enforce Standard Column Order (Matching EnhancedDownloadDialog.tsx)
+                 const firstRow = processedData[0] || {};
+                 const allKeys = Object.keys(firstRow);
+                 const norm = (s) => (s || '').toLowerCase().replace(/\s/g, '');
+
+                 // Identify keys in local data
+                 const registerNumberKey = allKeys.find(k => norm(k) === 'registernumber');
+                 const rollNumberKey = allKeys.find(k => norm(k) === 'rollnumber');
+                 const subjectCodeKey = allKeys.find(k => norm(k) === 'subjectcode');
+                 const attendanceKey = allKeys.find(k => norm(k) === 'attendance');
+                 const duplicateNumberKey = allKeys.find(k => norm(k) === 'duplicatenumber' || norm(k) === 'dummynumber');
+                 const bundleNumberKey = allKeys.find(k => norm(k) === 'bundlenumber') || 'Bundle Number'; // Should exist from step 1
+                 const internalMarkKey = allKeys.find(k => ['internalmark','internalmarks','internal'].includes(norm(k)));
+                 const qpCodeKey = allKeys.find(k => norm(k) === 'qpcode'); // Often present
+
+                 // Marks 1-15
+                 const questionMarkKeys = [];
+                 for (let i = 1; i <= 15; i++) {
+                     const key = allKeys.find(k => k === String(i));
+                     if (key) questionMarkKeys.push(key);
+                 }
+                 questionMarkKeys.sort((a, b) => Number(a) - Number(b));
+
+                 const orderedHeaders = [];
+                 const seen = new Set();
+                 // Exclude 2 Marks/16 Marks headers if they exist as data columns (unlikely in raw data but good to be safe)
+                 const excluded = new Set(['2 Marks', '16 Marks', 'Total', 'Result']);
+
+                 const add = (k) => {
+                     if (k && !seen.has(k) && !excluded.has(k)) {
+                         orderedHeaders.push(k);
+                         seen.add(k);
+                     }
+                 };
+
+                 // Explicit Order per Manual Download
+                 add('S.No'); // Often first
+                 add(registerNumberKey);
+                 add(rollNumberKey);
+                 add('Name'); // Common
+                 add(subjectCodeKey);
+                 add(internalMarkKey);
+                 add(attendanceKey);
+                 add(qpCodeKey);
+                 add(duplicateNumberKey);
+                 add(bundleNumberKey); 
+                 
+                 // Marks
+                 questionMarkKeys.forEach(k => add(k));
+
+                 // Computed/Final columns
+                 add('External Total');
+                 add('Converted External Total');
+                 add('Total marks'); // Note casing from frontend
+                 add('Result');
+
+                 // Remaining columns
+                 const remaining = allKeys.filter(k => !seen.has(k) && !excluded.has(k));
+                 remaining.forEach(k => add(k));
+
+                 // 3. Construct Final Data Array
+                 const finalData = processedData.map(row => {
+                     const orderedRow = {};
+                     orderedHeaders.forEach(header => {
+                         orderedRow[header] = row[header] !== undefined ? row[header] : '';
+                     });
+                     return orderedRow;
+                 });
+
+                 // Regenerate Sheet
+                 const newWs = XLSX.utils.json_to_sheet(finalData, { header: orderedHeaders });
+                 
+                 // Re-apply Merges logic
+                 const bundleIndex = orderedHeaders.indexOf(bundleNumberKey);
+                 if (bundleIndex !== -1) {
+                      if (!newWs['!merges']) newWs['!merges'] = [];
+                      const startCol = bundleIndex + 1; // Marks follow bundle number
+                      
+                      // Check connectivity of 1-10 (2 Marks) and 11-15 (16 Marks)
+                      // This assumes the keys '1'...'15' are present and consecutive
+                      // Simple approach: standard offset if keys exist
+                      const hasMarks = questionMarkKeys.length >= 10;
+                      
+                      if (hasMarks) {
+                          // 2 Marks: 10 cols
+                           // Check bounds
+                           if (orderedHeaders.length > startCol + 9) {
+                                newWs['!merges'].push({ s: { r: 0, c: startCol }, e: { r: 0, c: startCol + 9 } });
+                                const col2 = XLSX.utils.encode_cell({ r: 0, c: startCol });
+                                newWs[col2] = { t: 's', v: '2 Marks' };
+                           }
+                           // 16 Marks: 5 cols
+                           if (orderedHeaders.length > startCol + 14) {
+                                newWs['!merges'].push({ s: { r: 0, c: startCol + 10 }, e: { r: 0, c: startCol + 14 } });
+                                const col16 = XLSX.utils.encode_cell({ r: 0, c: startCol + 10 });
+                                newWs[col16] = { t: 's', v: '16 Marks' };
+                           }
+                      }
+                 }
+                 
+                 const newWb = XLSX.utils.book_new();
+                 XLSX.utils.book_append_sheet(newWb, newWs, sheetName);
+                 finalBuffer = XLSX.write(newWb, { bookType: 'xlsx', type: 'buffer' });
+            }
+
+        } catch (processErr) {
+            console.error(`Error processing sheet content for ${sheet.id}, using original file.`, processErr);
+            // Fallback to original buffer
+        }
+
+        // Construct Archive Path
+        const safeName = (name) => (name || 'Unknown').replace(/[^a-zA-Z0-9_\- ]/g, '').trim();
+        const year = sheet.year || 'UnknownYear';
+        const dept = safeName(sheet.department_name);
+        const sem = safeName(sheet.batch); // Semester
+        
+        const archiveDir = path.join(publicDir, safeName(year), dept, sem);
+        await fs.mkdir(archiveDir, { recursive: true });
+
+        const archivePath = path.join(archiveDir, `${sheet.sheet_name.replace('.xlsx', '')}.xlsx`);
+        await fs.writeFile(archivePath, fileBuffer);
+
+        // Mark as downloaded
+        await connection.execute('UPDATE sheets SET is_downloaded = true WHERE id = ?', [sheet.id]);
+        archivedCount++;
+      } catch (err) {
+        console.error(`Failed to archive sheet ${sheet.id}:`, err);
+      }
+    }
+
+    connection.release();
+    res.json({ success: true, count: archivedCount, message: `Successfully archived ${archivedCount} sheets to ${publicDir}` });
+
+  } catch (error) {
+    console.error('Bulk Archival Error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Auto-schema update helper commented out as per request (user will run migration_add_is_downloaded.sql manually)
+/*
+(async () => {
+  try {
+    const connection = await pool.getConnection();
+    try {
+      await connection.execute('SELECT is_downloaded FROM sheets LIMIT 1');
+    } catch (err) {
+      if (err.code === 'ER_BAD_FIELD_ERROR') {
+        console.log('Adding is_downloaded column to sheets table...');
+        await connection.execute('ALTER TABLE sheets ADD COLUMN is_downloaded BOOLEAN DEFAULT FALSE');
+      }
+    }
+    connection.release();
+  } catch (err) {
+    console.error('Schema check failed:', err);
+  }
+})();
+*/
+
+// ==============================================
+// ERROR HANDLERS
+// ==============================================
+
 // 404 handler
 app.use((req, res) => {
   res.status(404).json({ error: 'Endpoint not found' });
@@ -1935,6 +2215,90 @@ app.use((err, req, res, next) => {
 // ==============================================
 // START SERVER
 // ==============================================
+
+// ==============================================
+// ARCHIVAL ENDPOINT
+// ==============================================
+
+app.post('/api/sheets/:id/archive', authenticateToken, upload.single('file'), async (req, res) => {
+  const { id } = req.params;
+  const file = req.file;
+
+  if (!file) {
+    return res.status(400).json({ error: 'No file provided' });
+  }
+
+  try {
+    const connection = await pool.getConnection();
+    
+    // 1. Fetch sheet details
+    const [sheets] = await connection.execute(`
+      SELECT s.*, d.department_name, sub.subject_name 
+      FROM sheets s 
+      LEFT JOIN departments d ON s.department_id = d.id
+      LEFT JOIN subjects sub ON s.subject_id = sub.id
+      WHERE s.id = ?`, [id]);
+    
+    connection.release();
+
+    if (!sheets.length) return res.status(404).json({ error: 'Sheet not found' });
+    const sheet = sheets[0];
+
+    // 2. Validate Completion (Strict Check)
+    // Read the uploaded excel buffer to count rows
+    const workbook = XLSX.read(file.buffer, { type: 'buffer' });
+    const sheetName = workbook.SheetNames[0];
+    const worksheet = workbook.Sheets[sheetName];
+    const jsonData = XLSX.utils.sheet_to_json(worksheet);
+    
+    const totalBundles = Math.ceil(jsonData.length / 20);
+
+    const [rows] = await pool.execute(
+      'SELECT COUNT(DISTINCT bundle_number) as count FROM bundle_examiners WHERE sheet_id = ?',
+      [id]
+    );
+    const completedBundles = rows[0].count;
+
+    if (completedBundles < totalBundles) {
+       return res.json({ 
+         success: true, 
+         archived: false, 
+         message: `Sheet not fully completed (${completedBundles}/${totalBundles} bundles).` 
+       });
+    }
+
+    // 3. Archive Logic
+    const publicDir = path.resolve(__dirname, '..', '..', 'public', 'sheets');
+    const safeName = (name) => (name || 'Unknown').replace(/[^a-zA-Z0-9_\- ]/g, '').trim();
+    
+    const archiveDir = path.join(
+      publicDir,
+      safeName(sheet.department_name),
+      safeName(sheet.batch), // Semester
+      safeName(sheet.subject_name)
+    );
+
+    // Ensure directory exists
+    await fs.mkdir(archiveDir, { recursive: true });
+
+    // Save File
+    const archivePath = path.join(archiveDir, `${sheet.sheet_name.replace('.xlsx', '')}_completed.xlsx`);
+    await fs.writeFile(archivePath, file.buffer);
+
+    console.log(`✓ Archived Sheet to: ${archivePath}`);
+
+    // Update Access Time
+    // (Optional: Update 'updated_at' or similar in DB)
+
+    res.json({ success: true, archived: true, path: archivePath });
+
+  } catch (error) {
+    console.error('Archival Error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+
 
 app.listen(PORT, () => {
   console.log(`✓ Server running on port ${PORT}`);

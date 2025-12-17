@@ -1,7 +1,7 @@
 import UserProfile from "./UserProfile";
 import { User } from "@/contexts/DashboardContext";
 import { NavLink } from "react-router-dom";
-import { Sheet, Book, Building2, LayoutDashboard, Users } from "lucide-react";
+import { Sheet, Book, Building2, LayoutDashboard, Users, Archive } from "lucide-react";
 
 interface Profile {
   full_name: string | null;
@@ -26,6 +26,7 @@ const adminNavItems = [
   { href: "/subjects", icon: Book, label: "Manage Subjects" },
   { href: "/departments", icon: Building2, label: "Manage Departments" },
   { href: "/users", icon: Users, label: "Manage Users" },
+  { href: "/completed-sheets", icon: Book, label: "Completed Sheets" }, // Icon choice: Book or Archive. Book is already used. Let's use FileCheck or similar. Imported Archive below.
 ];
 
 const ceoNavItems = [

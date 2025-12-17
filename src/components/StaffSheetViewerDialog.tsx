@@ -408,6 +408,66 @@ const StaffSheetViewerDialog = ({ isOpen, onClose, sheet, sheetData, forceEditab
             console.error('Error updating sheet status:', updateError);
           } else {
             showSuccess('All bundles completed! Sheet marked as finished.');
+            
+            // Trigger Auto-Archival
+            try {
+               showLoading('Archiving completed sheet...');
+               
+               // Generate the complete file blob
+               // Re-create the workbook with appropriate formatting (similar to performSave)
+               const newWs = XLSX.utils.json_to_sheet(fullSheetData);
+               
+               // Re-apply merges for 2 Marks / 16 Marks if columns exist
+               // (Simplified logic: Assuming standard structure checks)
+               const firstRow = fullSheetData[0] || {};
+               const headers = Object.keys(firstRow);
+               const dupIndex = headers.findIndex(h => h.toLowerCase().includes('duplicate'));
+               
+               if (dupIndex !== -1) {
+                  if (!newWs['!merges']) newWs['!merges'] = [];
+                  const startCol = dupIndex + 1;
+                  // 2 Marks: 10 cols
+                  newWs['!merges'].push({ s: { r: 0, c: startCol }, e: { r: 0, c: startCol + 9 } });
+                  // 16 Marks: 5 cols
+                  newWs['!merges'].push({ s: { r: 0, c: startCol + 10 }, e: { r: 0, c: startCol + 14 } });
+                  
+                  // Add headers
+                  const col2 = XLSX.utils.encode_cell({ r: 0, c: startCol });
+                  const col16 = XLSX.utils.encode_cell({ r: 0, c: startCol + 10 });
+                  newWs[col2] = { t: 's', v: '2 Marks' };
+                  newWs[col16] = { t: 's', v: '16 Marks' };
+               }
+               
+               const newWb = XLSX.utils.book_new();
+               XLSX.utils.book_append_sheet(newWb, newWs, 'CompletedSheet');
+               const wbout = XLSX.write(newWb, { bookType: 'xlsx', type: 'array' });
+               const blob = new Blob([wbout], { type: 'application/octet-stream' });
+               
+               // Send to backend
+               const formData = new FormData();
+               formData.append('file', blob, 'archive.xlsx');
+               
+               const token = localStorage.getItem('coe_access_token');
+               const response = await fetch(`/api/sheets/${sheet.id}/archive`, {
+                 method: 'POST',
+                 headers: {
+                   'Authorization': `Bearer ${token}`
+                 },
+                 body: formData
+               });
+               
+               const result = await response.json();
+               dismissToast();
+               if (result.success && result.archived) {
+                 showSuccess('Sheet successfully auto-archived to server!');
+               } else if (result.message) {
+                 console.log('Archival Info:', result.message);
+               }
+            } catch (archiveErr) {
+               console.error('Archival failed:', archiveErr);
+               dismissToast();
+               // Don't show error to user as this is a background process mostly
+            }
           }
         }
       } catch (err) {

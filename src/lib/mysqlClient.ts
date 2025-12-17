@@ -654,6 +654,8 @@ export const mysqlClient = {
   channel,
   removeChannel,
   storage,
+  post: HttpClient.post.bind(HttpClient),
+  get: HttpClient.get.bind(HttpClient),
 };
 
 // Default export for easy migration
