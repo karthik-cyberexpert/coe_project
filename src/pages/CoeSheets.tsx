@@ -214,7 +214,17 @@ const CoeSheets = () => {
     if (!checkDateAvailability(sheet)) return;
     const jsonData = await loadSheetData(sheet);
     if (jsonData) {
-      setSheetDataForDownload(jsonData);
+      // Get subject code for bundle numbering
+      const currentSubject = subjects.find(s => s.id === selectedSubject);
+      const subjectCode = currentSubject?.subject_code || 'CODE';
+
+      // Inject Bundle Number dynamically (SubjectCode-01, SubjectCode-02, etc.)
+      const enrichedData = jsonData.map((row, index) => ({
+        ...row,
+        'Bundle Number': `${subjectCode}-${String(Math.ceil((index + 1) / 20)).padStart(2, '0')}`
+      }));
+      
+      setSheetDataForDownload(enrichedData);
       setSheetToDownload(sheet);
       setIsColumnSelectorOpen(true);
     }
